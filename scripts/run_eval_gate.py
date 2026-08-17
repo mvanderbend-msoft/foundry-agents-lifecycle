@@ -16,10 +16,11 @@ from azure.ai.evaluation import (
 from azure.identity import DefaultAzureCredential
 
 
-def extract_response_text(output: str) -> str:
+def extract_response(output: str) -> tuple[str, list[dict]]:
     completed_text = []
     streamed_text = []
     event_types = Counter()
+    tool_calls = {}
     for raw_line in output.splitlines():
         line = raw_line.lstrip("\ufeff \t")
         data_index = line.find("data:")
@@ -41,6 +42,12 @@ def extract_response_text(output: str) -> str:
             delta = payload.get("delta")
             if isinstance(delta, str):
                 streamed_text.append(delta)
+        elif event_type == "response.output_item.done":
+            item = payload.get("item", {})
+            item_type = item.get("type", "")
+            if isinstance(item_type, str) and "call" in item_type:
+                item_id = item.get("id", f"tool-call-{len(tool_calls)}")
+                tool_calls[item_id] = item
 
     text = "\n".join(completed_text).strip()
     if not text:
@@ -50,10 +57,10 @@ def extract_response_text(output: str) -> str:
             "Hosted agent completed without a textual response; "
             f"captured {len(output)} characters and events {dict(event_types)}."
         )
-    return text
+    return text, list(tool_calls.values())
 
 
-def invoke_agent(query: str, agent_endpoint: str) -> str:
+def invoke_agent(query: str, agent_endpoint: str) -> tuple[str, list[dict]]:
     command = [
         "azd",
         "ai",
@@ -84,7 +91,7 @@ def invoke_agent(query: str, agent_endpoint: str) -> str:
             text=True,
             timeout=1800,
         )
-        return extract_response_text(output_path.read_text(encoding="utf-8"))
+        return extract_response(output_path.read_text(encoding="utf-8"))
     finally:
         output_path.unlink(missing_ok=True)
 
@@ -152,7 +159,7 @@ def main() -> int:
         expected = case["ground_truth"]
         print(f"Invoking case {index}/{len(cases)}: {query}", flush=True)
         try:
-            response = invoke_agent(query, agent_endpoint)
+            response, tool_calls = invoke_agent(query, agent_endpoint)
         except Exception as exc:  # noqa: BLE001
             error = f"{type(exc).__name__}: {exc}"
             results.append(
@@ -176,6 +183,12 @@ def main() -> int:
             try:
                 if name == "fluency":
                     outcome = evaluator(response=response)
+                elif name == "task_adherence":
+                    outcome = evaluator(
+                        query=task_query,
+                        response=response,
+                        tool_calls=tool_calls,
+                    )
                 else:
                     outcome = evaluator(query=task_query, response=response)
                 item_results[name] = {

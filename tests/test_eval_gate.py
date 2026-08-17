@@ -17,7 +17,10 @@ class EvaluationGateTests(unittest.TestCase):
             '"text":"Evaluation response"}\n'
         )
 
-        self.assertEqual("Evaluation response", MODULE.extract_response_text(output))
+        self.assertEqual(
+            ("Evaluation response", []),
+            MODULE.extract_response(output),
+        )
 
     def test_falls_back_to_raw_response_deltas(self):
         output = (
@@ -25,11 +28,26 @@ class EvaluationGateTests(unittest.TestCase):
             'data: {"type":"response.output_text.delta","delta":"response"}\n'
         )
 
-        self.assertEqual("Evaluation response", MODULE.extract_response_text(output))
+        self.assertEqual(
+            ("Evaluation response", []),
+            MODULE.extract_response(output),
+        )
 
     def test_rejects_empty_response(self):
         with self.assertRaisesRegex(RuntimeError, "captured 26 characters"):
-            MODULE.extract_response_text("event: response.completed\n")
+            MODULE.extract_response("event: response.completed\n")
+
+    def test_extracts_tool_call_evidence(self):
+        output = (
+            'data: {"type":"response.output_item.done","item":'
+            '{"id":"call-1","type":"mcp_call","name":"List Records"}}\n'
+            'data: {"type":"response.output_text.done","text":"Done"}\n'
+        )
+
+        response, tool_calls = MODULE.extract_response(output)
+
+        self.assertEqual("Done", response)
+        self.assertEqual("List Records", tool_calls[0]["name"])
 
     def test_derives_resource_endpoint(self):
         endpoint = (
