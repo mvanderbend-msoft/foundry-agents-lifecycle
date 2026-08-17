@@ -5,6 +5,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -74,26 +75,35 @@ def invoke_agent(query: str, agent_endpoint: str) -> tuple[str, list[dict]]:
         "--output",
         "raw",
     ]
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        delete=False,
-    ) as output:
-        output_path = Path(output.name)
+    last_error = None
+    for attempt in range(1, 4):
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            delete=False,
+        ) as output:
+            output_path = Path(output.name)
 
-    try:
-        command_line = (
-            f"{shlex.join(command)} > {shlex.quote(str(output_path))} 2>&1"
-        )
-        subprocess.run(
-            ["bash", "-lc", command_line],
-            check=True,
-            text=True,
-            timeout=1800,
-        )
-        return extract_response(output_path.read_text(encoding="utf-8"))
-    finally:
-        output_path.unlink(missing_ok=True)
+        try:
+            command_line = (
+                f"{shlex.join(command)} > {shlex.quote(str(output_path))} 2>&1"
+            )
+            subprocess.run(
+                ["bash", "-lc", command_line],
+                check=True,
+                text=True,
+                timeout=1800,
+            )
+            return extract_response(output_path.read_text(encoding="utf-8"))
+        except (RuntimeError, subprocess.CalledProcessError) as exc:
+            last_error = exc
+            if attempt < 3:
+                time.sleep(5 * attempt)
+        finally:
+            output_path.unlink(missing_ok=True)
+
+    assert last_error is not None
+    raise last_error
 
 
 def project_resource_endpoint(project_endpoint: str) -> str:
