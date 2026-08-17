@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -59,14 +60,17 @@ def invoke_agent(query: str, version: str) -> str:
         "--output",
         "raw",
     ]
-    result = subprocess.run(
-        command,
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=1800,
-    )
-    return extract_response_text(f"{result.stdout}\n{result.stderr}")
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as output:
+        subprocess.run(
+            command,
+            check=True,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=1800,
+        )
+        output.seek(0)
+        return extract_response_text(output.read())
 
 
 def project_resource_endpoint(project_endpoint: str) -> str:
