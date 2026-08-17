@@ -119,6 +119,16 @@ def evaluator_passed(name: str, outcome: dict) -> bool:
     return False
 
 
+def evaluator_has_result(name: str, outcome: dict) -> bool:
+    if outcome.get(f"{name}_result") is not None:
+        return True
+    if name == "violence":
+        return isinstance(outcome.get("violence_score"), (int, float)) or outcome.get(
+            "violence"
+        ) in {"Very low", "Low", "Medium", "High"}
+    return False
+
+
 def main() -> int:
     from azure.ai.evaluation import (
         FluencyEvaluator,
@@ -207,16 +217,23 @@ def main() -> int:
         item_results = {}
         for name, evaluator in evaluators.items():
             try:
-                if name == "fluency":
-                    outcome = evaluator(response=response)
-                elif name == "task_adherence":
-                    outcome = evaluator(
-                        query=task_query,
-                        response=response,
-                        tool_calls=tool_calls,
-                    )
+                for attempt in range(1, 4):
+                    if name == "fluency":
+                        outcome = evaluator(response=response)
+                    elif name == "task_adherence":
+                        outcome = evaluator(
+                            query=task_query,
+                            response=response,
+                            tool_calls=tool_calls,
+                        )
+                    else:
+                        outcome = evaluator(query=task_query, response=response)
+                    if evaluator_has_result(name, outcome):
+                        break
+                    if attempt < 3:
+                        time.sleep(2 * attempt)
                 else:
-                    outcome = evaluator(query=task_query, response=response)
+                    raise RuntimeError(f"{name} evaluator returned no result.")
                 item_results[name] = {
                     "passed": evaluator_passed(name, outcome),
                     "score": outcome.get(name, outcome.get(f"{name}_score")),

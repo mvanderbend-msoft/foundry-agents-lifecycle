@@ -67,6 +67,14 @@ class EvaluationGateTests(unittest.TestCase):
             )
         )
 
+    def test_detects_incomplete_violence_result(self):
+        self.assertFalse(
+            MODULE.evaluator_has_result(
+                "violence",
+                {"violence": None, "violence_score": None},
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
