@@ -10,25 +10,26 @@ SPEC.loader.exec_module(MODULE)
 
 
 class EvaluationGateTests(unittest.TestCase):
-    def test_cleans_rendered_agent_output(self):
+    def test_extracts_completed_raw_response(self):
         output = (
-            "Agent: SupportAgentHosted\n"
-            "Endpoint: https://example.test\n"
-            "Version: 5\n"
-            "Protocol: responses\n"
-            "Message: Test\n"
-            "Connected to remote agent\n"
-            "Session: abc\n"
-            "Conversation: ghi\n"
-            "Invocation: def\n"
-            "\x1b[32mEvaluation response\x1b[0m\n"
+            "event: response.output_text.done\n"
+            'data: {"type":"response.output_text.done",'
+            '"text":"Evaluation response"}\n'
         )
 
-        self.assertEqual("Evaluation response", MODULE.clean_agent_output(output))
+        self.assertEqual("Evaluation response", MODULE.extract_response_text(output))
+
+    def test_falls_back_to_raw_response_deltas(self):
+        output = (
+            'data: {"type":"response.output_text.delta","delta":"Evaluation "}\n'
+            'data: {"type":"response.output_text.delta","delta":"response"}\n'
+        )
+
+        self.assertEqual("Evaluation response", MODULE.extract_response_text(output))
 
     def test_rejects_empty_response(self):
         with self.assertRaisesRegex(RuntimeError, "without a textual response"):
-            MODULE.clean_agent_output("Session: abc\nInvocation: def\n")
+            MODULE.extract_response_text("event: response.completed\n")
 
     def test_derives_resource_endpoint(self):
         endpoint = (

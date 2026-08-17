@@ -1,7 +1,6 @@
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -15,28 +14,30 @@ from azure.ai.evaluation import (
 from azure.identity import DefaultAzureCredential
 
 
-def clean_agent_output(output: str) -> str:
-    ansi_escape = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
-    metadata_prefixes = (
-        "Agent:",
-        "Endpoint:",
-        "Version:",
-        "Protocol:",
-        "Message:",
-        "Session:",
-        "Conversation:",
-        "Invocation:",
-        "Connecting to remote agent",
-        "Connected to remote agent",
-    )
-    lines = []
-    for raw_line in output.splitlines():
-        line = ansi_escape.sub("", raw_line).strip()
-        if not line or line.startswith(metadata_prefixes):
+def extract_response_text(output: str) -> str:
+    completed_text = []
+    streamed_text = []
+    for line in output.splitlines():
+        if not line.startswith("data:"):
             continue
-        lines.append(line)
+        try:
+            payload = json.loads(line.removeprefix("data:").strip())
+        except json.JSONDecodeError:
+            continue
 
-    text = "\n".join(lines).strip()
+        event_type = payload.get("type")
+        if event_type == "response.output_text.done":
+            text = payload.get("text")
+            if isinstance(text, str):
+                completed_text.append(text)
+        elif event_type == "response.output_text.delta":
+            delta = payload.get("delta")
+            if isinstance(delta, str):
+                streamed_text.append(delta)
+
+    text = "\n".join(completed_text).strip()
+    if not text:
+        text = "".join(streamed_text).strip()
     if not text:
         raise RuntimeError("Hosted agent completed without a textual response.")
     return text
@@ -53,6 +54,8 @@ def invoke_agent(query: str, version: str) -> str:
         version,
         "--new-session",
         "--no-prompt",
+        "--output",
+        "raw",
     ]
     result = subprocess.run(
         command,
@@ -61,7 +64,7 @@ def invoke_agent(query: str, version: str) -> str:
         text=True,
         timeout=1800,
     )
-    return clean_agent_output(f"{result.stdout}\n{result.stderr}")
+    return extract_response_text(f"{result.stdout}\n{result.stderr}")
 
 
 def project_resource_endpoint(project_endpoint: str) -> str:
