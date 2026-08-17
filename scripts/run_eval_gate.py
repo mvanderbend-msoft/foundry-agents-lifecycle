@@ -17,11 +17,13 @@ from azure.identity import DefaultAzureCredential
 def extract_response_text(output: str) -> str:
     completed_text = []
     streamed_text = []
-    for line in output.splitlines():
-        if not line.startswith("data:"):
+    for raw_line in output.splitlines():
+        line = raw_line.lstrip("\ufeff \t")
+        data_index = line.find("data:")
+        if data_index < 0:
             continue
         try:
-            payload = json.loads(line.removeprefix("data:").strip())
+            payload = json.loads(line[data_index + len("data:") :].strip())
         except json.JSONDecodeError:
             continue
 

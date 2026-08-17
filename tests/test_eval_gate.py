@@ -13,7 +13,7 @@ class EvaluationGateTests(unittest.TestCase):
     def test_extracts_completed_raw_response(self):
         output = (
             "event: response.output_text.done\n"
-            'data: {"type":"response.output_text.done",'
+            '\ufeff  data: {"type":"response.output_text.done",'
             '"text":"Evaluation response"}\n'
         )
 
