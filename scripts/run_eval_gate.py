@@ -9,13 +9,6 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from azure.ai.evaluation import (
-    FluencyEvaluator,
-    TaskAdherenceEvaluator,
-    ViolenceEvaluator,
-)
-from azure.identity import DefaultAzureCredential
-
 
 def extract_response(output: str) -> tuple[str, list[dict]]:
     completed_text = []
@@ -127,6 +120,13 @@ def evaluator_passed(name: str, outcome: dict) -> bool:
 
 
 def main() -> int:
+    from azure.ai.evaluation import (
+        FluencyEvaluator,
+        TaskAdherenceEvaluator,
+        ViolenceEvaluator,
+    )
+    from azure.identity import DefaultAzureCredential
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-endpoint", required=True)
     parser.add_argument("--model-deployment", required=True)
