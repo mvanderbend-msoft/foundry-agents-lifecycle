@@ -12,7 +12,14 @@ SPEC.loader.exec_module(MODULE)
 class EvaluationGateTests(unittest.TestCase):
     def test_cleans_rendered_agent_output(self):
         output = (
+            "Agent: SupportAgentHosted\n"
+            "Endpoint: https://example.test\n"
+            "Version: 5\n"
+            "Protocol: responses\n"
+            "Message: Test\n"
+            "Connected to remote agent\n"
             "Session: abc\n"
+            "Conversation: ghi\n"
             "Invocation: def\n"
             "\x1b[32mEvaluation response\x1b[0m\n"
         )

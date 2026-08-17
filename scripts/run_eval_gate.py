@@ -17,10 +17,22 @@ from azure.identity import DefaultAzureCredential
 
 def clean_agent_output(output: str) -> str:
     ansi_escape = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+    metadata_prefixes = (
+        "Agent:",
+        "Endpoint:",
+        "Version:",
+        "Protocol:",
+        "Message:",
+        "Session:",
+        "Conversation:",
+        "Invocation:",
+        "Connecting to remote agent",
+        "Connected to remote agent",
+    )
     lines = []
     for raw_line in output.splitlines():
         line = ansi_escape.sub("", raw_line).strip()
-        if not line or line.startswith(("Session:", "Invocation:")):
+        if not line or line.startswith(metadata_prefixes):
             continue
         lines.append(line)
 
@@ -49,7 +61,7 @@ def invoke_agent(query: str, version: str) -> str:
         text=True,
         timeout=1800,
     )
-    return clean_agent_output(result.stdout)
+    return clean_agent_output(f"{result.stdout}\n{result.stderr}")
 
 
 def project_resource_endpoint(project_endpoint: str) -> str:
