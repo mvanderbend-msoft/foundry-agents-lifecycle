@@ -47,15 +47,13 @@ def extract_response_text(output: str) -> str:
     return text
 
 
-def invoke_agent(query: str, version: str) -> str:
+def invoke_agent(query: str) -> str:
     command = [
         "azd",
         "ai",
         "agent",
         "invoke",
         query,
-        "--version",
-        version,
         "--new-session",
         "--no-prompt",
         "--output",
@@ -100,8 +98,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    agent_name, separator, agent_version = args.agent_id.rpartition(":")
-    if not separator or not agent_name or not agent_version:
+    agent_name, separator, version = args.agent_id.rpartition(":")
+    if not separator or not agent_name or not version:
         raise ValueError("Agent ID must use the <name>:<version> format.")
 
     dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
@@ -142,7 +140,7 @@ def main() -> int:
         expected = case["ground_truth"]
         print(f"Invoking case {index}/{len(cases)}: {query}", flush=True)
         try:
-            response = invoke_agent(query, agent_version)
+            response = invoke_agent(query)
         except Exception as exc:  # noqa: BLE001
             error = f"{type(exc).__name__}: {exc}"
             results.append(
