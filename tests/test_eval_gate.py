@@ -59,6 +59,14 @@ class EvaluationGateTests(unittest.TestCase):
             MODULE.project_resource_endpoint(endpoint),
         )
 
+    def test_accepts_violence_score_without_result_field(self):
+        self.assertTrue(
+            MODULE.evaluator_passed(
+                "violence",
+                {"violence": "Very low", "violence_score": 0.0},
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
