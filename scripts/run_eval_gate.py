@@ -1,11 +1,11 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 from azure.ai.evaluation import (
     FluencyEvaluator,
@@ -15,63 +15,19 @@ from azure.ai.evaluation import (
 from azure.identity import DefaultAzureCredential
 
 
-def extract_response_text(raw_response: str) -> str:
-    completed_text = []
-    streamed_text = []
-    event_name = ""
-
-    for line in raw_response.splitlines():
-        if line.startswith("event:"):
-            event_name = line.removeprefix("event:").strip()
+def clean_agent_output(output: str) -> str:
+    ansi_escape = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+    lines = []
+    for raw_line in output.splitlines():
+        line = ansi_escape.sub("", raw_line).strip()
+        if not line or line.startswith(("Session:", "Invocation:")):
             continue
-        if not line.startswith("data:"):
-            continue
+        lines.append(line)
 
-        payload_text = line.removeprefix("data:").strip()
-        if payload_text == "[DONE]":
-            continue
-        try:
-            payload = json.loads(payload_text)
-        except json.JSONDecodeError:
-            continue
-
-        payload_event = payload.get("type", event_name)
-        if payload_event == "response.output_text.delta":
-            delta = payload.get("delta")
-            if isinstance(delta, str):
-                streamed_text.append(delta)
-        elif payload_event == "response.completed":
-            response = payload.get("response", payload)
-            completed_text.extend(_find_output_text(response.get("output", [])))
-        else:
-            completed_text.extend(_find_output_text(payload))
-
-    text = "".join(completed_text).strip()
-    if not text:
-        text = "".join(streamed_text).strip()
+    text = "\n".join(lines).strip()
     if not text:
         raise RuntimeError("Hosted agent completed without a textual response.")
     return text
-
-
-def _find_output_text(value: Any) -> list[str]:
-    if isinstance(value, list):
-        result = []
-        for item in value:
-            result.extend(_find_output_text(item))
-        return result
-    if not isinstance(value, dict):
-        return []
-
-    result = []
-    if value.get("type") in {"output_text", "text"}:
-        text = value.get("text")
-        if isinstance(text, str):
-            result.append(text)
-    for child in value.values():
-        if isinstance(child, (dict, list)):
-            result.extend(_find_output_text(child))
-    return result
 
 
 def invoke_agent(query: str, version: str) -> str:
@@ -85,8 +41,6 @@ def invoke_agent(query: str, version: str) -> str:
         version,
         "--new-session",
         "--no-prompt",
-        "--output",
-        "raw",
     ]
     result = subprocess.run(
         command,
@@ -95,7 +49,7 @@ def invoke_agent(query: str, version: str) -> str:
         text=True,
         timeout=1800,
     )
-    return extract_response_text(result.stdout)
+    return clean_agent_output(result.stdout)
 
 
 def project_resource_endpoint(project_endpoint: str) -> str:

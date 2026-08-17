@@ -126,7 +126,7 @@ repo:<owner>/<repository>:environment:dev
 repo:<owner>/<repository>:environment:prod
 ```
 
-Following Microsoft's hosted-agent quickstart, assign **Foundry User** and **Contributor** on each target Foundry project. Prefer separate identities for DEV and PROD.
+Following Microsoft's hosted-agent quickstart, assign **Foundry User** and **Contributor** on each target Foundry project. The DEV identity also requires **Cognitive Services OpenAI User** on the Foundry account so Microsoft's evaluation SDK can invoke the judge model. Prefer separate identities for DEV and PROD.
 
 ## 7. Protect `main`
 
