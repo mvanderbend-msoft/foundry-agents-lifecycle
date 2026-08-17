@@ -76,7 +76,8 @@ def invoke_agent(query: str, agent_endpoint: str) -> tuple[str, list[dict]]:
         "raw",
     ]
     last_error = None
-    for attempt in range(1, 4):
+    maximum_attempts = 5
+    for attempt in range(1, maximum_attempts + 1):
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
@@ -97,7 +98,7 @@ def invoke_agent(query: str, agent_endpoint: str) -> tuple[str, list[dict]]:
             return extract_response(output_path.read_text(encoding="utf-8"))
         except (RuntimeError, subprocess.CalledProcessError) as exc:
             last_error = exc
-            if attempt < 3:
+            if attempt < maximum_attempts:
                 time.sleep(5 * attempt)
         finally:
             output_path.unlink(missing_ok=True)
@@ -162,6 +163,9 @@ def main() -> int:
             args.project_endpoint,
         ),
     }
+
+    print("Warming up the explicit DEV agent endpoint.", flush=True)
+    invoke_agent("Without calling tools, reply EVALUATION_READY.", agent_endpoint)
 
     results = []
     for index, case in enumerate(cases, start=1):
