@@ -53,12 +53,14 @@ def extract_response_text(output: str) -> str:
     return text
 
 
-def invoke_agent(query: str) -> str:
+def invoke_agent(query: str, agent_endpoint: str) -> str:
     command = [
         "azd",
         "ai",
         "agent",
         "invoke",
+        "--agent-endpoint",
+        agent_endpoint,
         query,
         "--new-session",
         "--no-prompt",
@@ -107,6 +109,10 @@ def main() -> int:
     agent_name, separator, version = args.agent_id.rpartition(":")
     if not separator or not agent_name or not version:
         raise ValueError("Agent ID must use the <name>:<version> format.")
+    agent_endpoint = (
+        f"{args.project_endpoint.rstrip('/')}/agents/{agent_name}"
+        "/endpoint/protocols/openai/responses?api-version=v1"
+    )
 
     dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
     thresholds = json.loads(args.thresholds.read_text(encoding="utf-8"))
@@ -146,7 +152,7 @@ def main() -> int:
         expected = case["ground_truth"]
         print(f"Invoking case {index}/{len(cases)}: {query}", flush=True)
         try:
-            response = invoke_agent(query)
+            response = invoke_agent(query, agent_endpoint)
         except Exception as exc:  # noqa: BLE001
             error = f"{type(exc).__name__}: {exc}"
             results.append(
