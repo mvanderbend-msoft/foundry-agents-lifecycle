@@ -23,7 +23,6 @@ async def main() -> None:
         client=client,
         instructions=AGENT_INSTRUCTIONS,
         tools=toolbox,
-        default_options={"store": False},
     )
     server = ResponsesHostServer(agent)
     await server.run_async()

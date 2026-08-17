@@ -28,6 +28,9 @@ class ManifestTests(unittest.TestCase):
         cls.prod_toolbox = yaml.safe_load(
             (ROOT / cls.prod["toolboxDefinition"]).read_text(encoding="utf-8")
         )
+        cls.main_source = (
+            ROOT / "src" / "support-agent" / "main.py"
+        ).read_text(encoding="utf-8")
 
     def test_agent_identity_matches(self):
         service = self.azure["services"]["support-agent"]
@@ -55,6 +58,9 @@ class ManifestTests(unittest.TestCase):
                 {"type": "web_search", "name": "web_search"},
                 toolbox["tools"],
             )
+
+    def test_toolbox_agent_keeps_response_state(self):
+        self.assertNotIn('"store": False', self.main_source)
 
     def test_only_dev_and_prod_are_configured(self):
         self.assertEqual("dev", self.dev["environment"])

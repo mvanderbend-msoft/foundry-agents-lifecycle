@@ -81,6 +81,7 @@ jobs:
           set -euo pipefail
           azd ai agent invoke \
             "Without calling tools, briefly state the two operational modes you support." \
+            --new-session \
             --no-prompt \
             --output raw > /tmp/agent-response.txt
           grep -q "event: response.completed" /tmp/agent-response.txt
@@ -91,6 +92,7 @@ jobs:
           set -euo pipefail
           azd ai agent invoke \
             "Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+            --new-session \
             --no-prompt \
             --output raw > /tmp/servicenow-response.txt
           grep -q "event: response.completed" /tmp/servicenow-response.txt
@@ -190,6 +192,7 @@ jobs:
           set -euo pipefail
           azd ai agent invoke \
             "Without calling tools, briefly state the two operational modes you support." \
+            --new-session \
             --no-prompt \
             --output raw > /tmp/agent-response.txt
           grep -q "event: response.completed" /tmp/agent-response.txt
@@ -200,6 +203,7 @@ jobs:
           set -euo pipefail
           azd ai agent invoke \
             "Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+            --new-session \
             --no-prompt \
             --output raw > /tmp/servicenow-response.txt
           grep -q "event: response.completed" /tmp/servicenow-response.txt
