@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -60,17 +61,26 @@ def invoke_agent(query: str, version: str) -> str:
         "--output",
         "raw",
     ]
-    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as output:
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        delete=False,
+    ) as output:
+        output_path = Path(output.name)
+
+    try:
+        command_line = (
+            f"{shlex.join(command)} > {shlex.quote(str(output_path))} 2>&1"
+        )
         subprocess.run(
-            command,
+            ["bash", "-lc", command_line],
             check=True,
-            stdout=output,
-            stderr=subprocess.STDOUT,
             text=True,
             timeout=1800,
         )
-        output.seek(0)
-        return extract_response_text(output.read())
+        return extract_response_text(output_path.read_text(encoding="utf-8"))
+    finally:
+        output_path.unlink(missing_ok=True)
 
 
 def project_resource_endpoint(project_endpoint: str) -> str:
