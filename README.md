@@ -14,9 +14,10 @@ It uses Microsoft Learn's current hosted-agent deployment commands rather than t
 Developer change
   -> Pull request
   -> CI: lint, security scan, tests, manifest dry-run
-  -> Merge to main
-  -> CD: deploy hosted agent to DEV
-  -> DEV smoke test and evaluation
+  -> Deploy pull-request commit to DEV
+  -> DEV smoke test and evaluation (required merge check)
+  -> Merge to main only after DEV passes
+  -> Revalidate the merged commit in DEV
   -> PROD environment approval
   -> Deploy the same commit to PROD
   -> PROD smoke test
@@ -45,7 +46,7 @@ Each environment gets a new immutable hosted-agent version created from the same
 
 | Environment | Foundry project | Deployment |
 |---|---|---|
-| DEV | `mvanderbend-9174-dev` | Automatic after merge |
+| DEV | `mvanderbend-9174-dev` | Automatic for pull requests and `main` |
 | PROD | `mvanderbend-9174` | Required GitHub Environment approval |
 
 The hosted agent is named `SupportAgentHosted` so it can coexist with the existing prompt agent `SupportAgent:13`.
