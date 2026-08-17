@@ -28,7 +28,7 @@ class EvaluationGateTests(unittest.TestCase):
         self.assertEqual("Evaluation response", MODULE.extract_response_text(output))
 
     def test_rejects_empty_response(self):
-        with self.assertRaisesRegex(RuntimeError, "without a textual response"):
+        with self.assertRaisesRegex(RuntimeError, "captured 26 characters"):
             MODULE.extract_response_text("event: response.completed\n")
 
     def test_derives_resource_endpoint(self):

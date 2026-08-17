@@ -5,7 +5,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from azure.ai.evaluation import (
@@ -19,6 +19,7 @@ from azure.identity import DefaultAzureCredential
 def extract_response_text(output: str) -> str:
     completed_text = []
     streamed_text = []
+    event_types = Counter()
     for raw_line in output.splitlines():
         line = raw_line.lstrip("\ufeff \t")
         data_index = line.find("data:")
@@ -30,6 +31,8 @@ def extract_response_text(output: str) -> str:
             continue
 
         event_type = payload.get("type")
+        if isinstance(event_type, str):
+            event_types[event_type] += 1
         if event_type == "response.output_text.done":
             text = payload.get("text")
             if isinstance(text, str):
@@ -43,7 +46,10 @@ def extract_response_text(output: str) -> str:
     if not text:
         text = "".join(streamed_text).strip()
     if not text:
-        raise RuntimeError("Hosted agent completed without a textual response.")
+        raise RuntimeError(
+            "Hosted agent completed without a textual response; "
+            f"captured {len(output)} characters and events {dict(event_types)}."
+        )
     return text
 
 
