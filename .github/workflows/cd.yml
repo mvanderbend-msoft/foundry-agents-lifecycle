@@ -102,7 +102,7 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
             if azd ai agent invoke \
-              "Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+              "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
               --new-session \
               --no-prompt \
               --output raw > /tmp/servicenow-response.txt &&
@@ -235,7 +235,7 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
             if azd ai agent invoke \
-              "Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+              "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
               --new-session \
               --no-prompt \
               --output raw > /tmp/servicenow-response.txt &&
