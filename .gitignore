@@ -4,4 +4,4 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.foundry/results/
+**/.foundry/results/
