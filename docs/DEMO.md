@@ -4,7 +4,7 @@
 
 The agent lifecycle is code-first:
 
-> Developers change the agent in Git. CI validates it. CD recreates it in DEV, evaluates it, and only an approved commit is recreated in PROD.
+> Developers change the agent in Git. CI validates it, the pull-request commit is deployed and evaluated in DEV, and only a passing change can merge. The merged commit is revalidated before approved promotion to PROD.
 
 ## Before the demo
 
@@ -30,30 +30,25 @@ Explain that no portal export is promoted. The pipeline applies the same reposit
 
 ## 2. Open the pull request
 
-Show `.github/workflows/ci.yml`:
+Show `.github/workflows/ci.yml` and the `deploy-dev` job in `.github/workflows/cd.yml`:
 
 1. Ruff linting
 2. Bandit security scan
 3. Unit and manifest tests
 4. Evaluation dataset validation
 5. `azd ai agent doctor --local-only`
-
-CI uses no Azure deployment identity.
-
-## 3. Merge and deploy DEV
-
-Show the `deploy-dev` job in `.github/workflows/cd.yml`:
-
-1. Authenticate through the DEV GitHub OIDC identity.
-2. Load `config/dev.json`.
-3. Configure the `dev` azd environment.
-4. Run `azd deploy --no-prompt`.
-5. Verify status with `azd ai agent show`.
-6. Invoke the hosted agent.
-7. Run Foundry evaluation.
-8. Compare with the accepted DEV baseline.
+6. Authenticate through the DEV GitHub OIDC identity.
+7. Deploy the pull-request commit to DEV.
+8. Run model and ServiceNow smoke checks.
+9. Evaluate against the accepted DEV baseline.
 
 Discuss the workflow summary and evaluation report.
+
+The branch protection rule requires both `Lint, Test, and Validate` and `Deploy and Evaluate DEV`, so the pull request cannot merge until both pass.
+
+## 3. Merge and revalidate
+
+Merge the pull request. The `main` workflow deploys and evaluates the merged commit in DEV again, ensuring the exact production candidate passes before approval.
 
 ## 4. Approve PROD
 
@@ -74,8 +69,9 @@ There is no intermediate test environment.
 ```text
 Change
   -> PR validation
-  -> DEV deployment
-  -> DEV evaluation gate
+  -> PR commit deployed to DEV
+  -> required DEV evaluation merge gate
+  -> merge and revalidate main commit
   -> PROD approval
   -> PROD deployment
   -> production monitoring
