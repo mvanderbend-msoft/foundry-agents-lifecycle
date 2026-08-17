@@ -39,7 +39,9 @@ jobs:
         run: pytest tests -v
 
       - name: Validate evaluation dataset
-        run: python -m json.tool evals/release.json > /dev/null
+        run: |
+          python -m json.tool evals/release.json > /dev/null
+          python -m json.tool evals/thresholds.json > /dev/null
 
       - name: Install Azure Developer CLI
         uses: Azure/setup-azd@v2

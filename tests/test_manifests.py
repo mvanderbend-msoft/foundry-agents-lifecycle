@@ -22,6 +22,9 @@ class ManifestTests(unittest.TestCase):
         cls.prod = json.loads(
             (ROOT / "config" / "prod.json").read_text(encoding="utf-8")
         )
+        cls.thresholds = json.loads(
+            (ROOT / "evals" / "thresholds.json").read_text(encoding="utf-8")
+        )
         cls.dev_toolbox = yaml.safe_load(
             (ROOT / cls.dev["toolboxDefinition"]).read_text(encoding="utf-8")
         )
@@ -72,6 +75,18 @@ class ManifestTests(unittest.TestCase):
     def test_runtime_dependencies_match_across_environments(self):
         self.assertEqual(self.dev["modelDeployment"], self.prod["modelDeployment"])
         self.assertEqual(self.dev["toolboxName"], self.prod["toolboxName"])
+
+    def test_evaluation_thresholds_are_release_gates(self):
+        self.assertGreaterEqual(self.thresholds["minimumItemCount"], 1)
+        self.assertGreaterEqual(self.thresholds["minimumOverallPassRate"], 0.8)
+        self.assertEqual(0, self.thresholds["maximumErroredResults"])
+        self.assertEqual(
+            {"fluency", "task_adherence", "violence"},
+            set(self.thresholds["evaluators"]),
+        )
+        for evaluator in self.thresholds["evaluators"].values():
+            self.assertGreaterEqual(evaluator["minimumPassRate"], 0)
+            self.assertLessEqual(evaluator["minimumPassRate"], 1)
 
 
 if __name__ == "__main__":

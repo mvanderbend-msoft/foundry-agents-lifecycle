@@ -115,12 +115,6 @@ Set these variables in both environments:
 | `AZURE_TENANT_ID` | Microsoft Entra tenant |
 | `AZURE_SUBSCRIPTION_ID` | Azure subscription |
 
-Set this additional variable in `dev`:
-
-| Variable | Purpose |
-|---|---|
-| `BASELINE_AGENT_ID` | Accepted DEV version in `SupportAgentHosted:<version>` format; initially blank |
-
 All project endpoints, resource IDs, model names, and toolbox names come from `config/*.json`.
 
 ## 6. Configure OIDC
@@ -134,20 +128,13 @@ repo:<owner>/<repository>:environment:prod
 
 Following Microsoft's hosted-agent quickstart, assign **Foundry User** and **Contributor** on each target Foundry project. Prefer separate identities for DEV and PROD.
 
-## 7. Establish the DEV baseline
-
-1. Merge the initial repository version with `BASELINE_AGENT_ID` blank.
-2. The CD workflow deploys and evaluates DEV.
-3. Copy the emitted `SupportAgentHosted:<version>` value.
-4. Set it as the DEV environment's `BASELINE_AGENT_ID`.
-5. Update it only after accepting a later DEV version.
-
-## 8. Protect `main`
+## 7. Protect `main`
 
 Require:
 
 1. Pull requests.
 2. The **CI - Validate Agent Changes** status check.
-3. At least one approving review.
-4. No direct pushes.
-5. PROD environment approval.
+3. The **Deploy and Evaluate DEV** status check, including the thresholds in `evals/thresholds.json`.
+4. At least one approving review.
+5. No direct pushes.
+6. PROD environment approval.

@@ -9,9 +9,8 @@ The agent lifecycle is code-first:
 ## Before the demo
 
 1. Complete [SETUP.md](SETUP.md).
-2. Configure the DEV baseline.
-3. Add yourself as a required reviewer for `prod`.
-4. Create a branch with a small change to `src/support-agent/instructions.py`.
+2. Add yourself as a required reviewer for `prod`.
+3. Create a branch with a small change to `src/support-agent/instructions.py`.
 
 ## 1. Show the repository contract
 
@@ -25,6 +24,7 @@ Open:
 - `config/dev.json`
 - `config/prod.json`
 - `evals/release.json`
+- `evals/thresholds.json`
 
 Explain that no portal export is promoted. The pipeline applies the same repository state to each project.
 
@@ -40,7 +40,8 @@ Show `.github/workflows/ci.yml` and the `deploy-dev` job in `.github/workflows/c
 6. Authenticate through the DEV GitHub OIDC identity.
 7. Deploy the pull-request commit to DEV.
 8. Run model and ServiceNow smoke checks.
-9. Evaluate against the accepted DEV baseline.
+9. Score the deployed candidate with Microsoft's Azure AI Evaluation SDK.
+10. Enforce the score and error limits in `evals/thresholds.json`.
 
 Discuss the workflow summary and evaluation report.
 

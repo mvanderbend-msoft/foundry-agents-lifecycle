@@ -37,6 +37,7 @@ The repository is the source of truth:
 | Hosted deployment | `azure.yaml` and `src/support-agent/agent.yaml` |
 | Environment values | `config/dev.json` and `config/prod.json` |
 | Evaluation cases | `evals/release.json` |
+| Evaluation thresholds | `evals/thresholds.json` |
 | CI policy | `.github/workflows/ci.yml` |
 | Promotion policy | `.github/workflows/cd.yml` |
 
@@ -73,9 +74,9 @@ pytest tests -v
 
 For deployment setup and the demo script, see [docs/SETUP.md](docs/SETUP.md) and [docs/DEMO.md](docs/DEMO.md).
 
-## Evaluation limitation
+## Evaluation gate
 
-The preview `microsoft/ai-agent-evals@v3-beta` action compares agent versions in the same project. Keep the accepted baseline in DEV and compare each new candidate with it. The DEV report is reviewed at the protected PROD approval gate.
+The workflow invokes each release case against the deployed DEV candidate, then scores the captured responses with Microsoft's Azure AI Evaluation SDK. `scripts/run_eval_gate.py` enforces the source-controlled limits in `evals/thresholds.json`; missing, errored, or insufficient scores fail the required PR check. The detailed result is retained as a workflow artifact and reviewed again at the protected PROD approval gate.
 
 ## Microsoft documentation
 
