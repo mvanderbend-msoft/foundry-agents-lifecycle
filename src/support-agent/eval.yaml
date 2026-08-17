@@ -1,0 +1,17 @@
+name: SupportAgentHosted-smoke
+agent:
+    name: SupportAgentHosted
+    kind: hosted
+    version: "2"
+dataset:
+    local_uri: ../../evals/release.jsonl
+evaluators:
+    - builtin.fluency
+    - builtin.task_adherence
+    - builtin.violence
+    - name: SupportAgentHosted-smoke
+      version: "1"
+      local_uri: evaluators/SupportAgentHosted-smoke/rubric_dimensions.json
+options:
+    eval_model: gpt-5.6-sol
+max_samples: 15

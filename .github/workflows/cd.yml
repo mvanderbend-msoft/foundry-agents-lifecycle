@@ -1,0 +1,214 @@
+name: CD - Deploy Agent to Environments
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: support-agent-release
+  cancel-in-progress: false
+
+jobs:
+  deploy-dev:
+    name: Deploy and Evaluate DEV
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      agent_id: ${{ steps.agent.outputs.agent-id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Azure Developer CLI
+        uses: Azure/setup-azd@v2
+
+      - name: Install Foundry extension
+        run: azd ext install microsoft.foundry
+
+      - name: Verify Foundry extension
+        run: |
+          set -euo pipefail
+          azd ext list | grep -q "microsoft.foundry"
+          azd ai agent --help > /dev/null
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure azd authentication
+        run: |
+          azd config set auth.useAzCliAuth true
+          azd config set defaults.subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Configure DEV environment
+        id: dev-config
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="config/dev.json"
+          azd_env="$(jq -r '.azdEnvironment' "$config")"
+
+          azd env select "$azd_env" || azd env new "$azd_env" --no-prompt
+          azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          azd env set AZURE_TENANT_ID "${{ vars.AZURE_TENANT_ID }}"
+          azd env set AZURE_LOCATION "$(jq -r '.location' "$config")"
+          azd env set FOUNDRY_PROJECT_ENDPOINT "$(jq -r '.projectEndpoint' "$config")"
+          azd env set AZURE_AI_PROJECT_ID "$(jq -r '.projectResourceId' "$config")"
+          azd env set FOUNDRY_MODEL_NAME "$(jq -r '.modelDeployment' "$config")"
+          azd env set TOOLBOX_NAME "$(jq -r '.toolboxName' "$config")"
+          azd env get-values
+          echo "project-endpoint=$(jq -r '.projectEndpoint' "$config")" >> "$GITHUB_OUTPUT"
+          echo "evaluation-model=$(jq -r '.evaluationModelDeployment' "$config")" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy hosted agent to DEV
+        run: azd deploy --no-prompt
+
+      - name: Show DEV agent status
+        run: azd ai agent show --no-prompt --output json
+
+      - name: Smoke test DEV
+        run: |
+          set -euo pipefail
+          azd ai agent invoke \
+            "Without calling tools, briefly state the two operational modes you support." \
+            --no-prompt \
+            --output raw > /tmp/agent-response.txt
+          grep -q "event: response.completed" /tmp/agent-response.txt
+          ! grep -q "event: response.failed" /tmp/agent-response.txt
+
+      - name: Smoke test DEV ServiceNow connection
+        run: |
+          set -euo pipefail
+          azd ai agent invoke \
+            "Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+            --no-prompt \
+            --output raw > /tmp/servicenow-response.txt
+          grep -q "event: response.completed" /tmp/servicenow-response.txt
+          ! grep -q "event: response.failed" /tmp/servicenow-response.txt
+          ! grep -q "Error: Function failed" /tmp/servicenow-response.txt
+          ! grep -q '"error":{' /tmp/servicenow-response.txt
+          grep -q "SERVICENOW_SMOKE_OK" /tmp/servicenow-response.txt
+
+      - name: Resolve DEV agent version
+        id: agent
+        run: |
+          set -euo pipefail
+          agent_name="$(azd env get-value AGENT_SUPPORT_AGENT_NAME)"
+          agent_version="$(azd env get-value AGENT_SUPPORT_AGENT_VERSION)"
+          echo "agent-id=${agent_name}:${agent_version}" >> "$GITHUB_OUTPUT"
+          echo "DEV candidate: \`${agent_name}:${agent_version}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Evaluate DEV candidate
+        if: ${{ vars.BASELINE_AGENT_ID == '' }}
+        uses: microsoft/ai-agent-evals@v3-beta
+        with:
+          azure-ai-project-endpoint: ${{ steps.dev-config.outputs.project-endpoint }}
+          deployment-name: ${{ steps.dev-config.outputs.evaluation-model }}
+          agent-ids: ${{ steps.agent.outputs.agent-id }}
+          data-path: ${{ github.workspace }}/evals/release.json
+
+      - name: Compare DEV candidate with accepted baseline
+        if: ${{ vars.BASELINE_AGENT_ID != '' }}
+        uses: microsoft/ai-agent-evals@v3-beta
+        with:
+          azure-ai-project-endpoint: ${{ steps.dev-config.outputs.project-endpoint }}
+          deployment-name: ${{ steps.dev-config.outputs.evaluation-model }}
+          agent-ids: ${{ vars.BASELINE_AGENT_ID }},${{ steps.agent.outputs.agent-id }}
+          baseline-agent-id: ${{ vars.BASELINE_AGENT_ID }}
+          data-path: ${{ github.workspace }}/evals/release.json
+
+  deploy-prod:
+    name: Deploy to PROD
+    needs:
+      - deploy-dev
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout evaluated commit
+        uses: actions/checkout@v4
+
+      - name: Install Azure Developer CLI
+        uses: Azure/setup-azd@v2
+
+      - name: Install Foundry extension
+        run: azd ext install microsoft.foundry
+
+      - name: Verify Foundry extension
+        run: |
+          set -euo pipefail
+          azd ext list | grep -q "microsoft.foundry"
+          azd ai agent --help > /dev/null
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure azd authentication
+        run: |
+          azd config set auth.useAzCliAuth true
+          azd config set defaults.subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Configure PROD environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="config/prod.json"
+          azd_env="$(jq -r '.azdEnvironment' "$config")"
+
+          azd env select "$azd_env" || azd env new "$azd_env" --no-prompt
+          azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          azd env set AZURE_TENANT_ID "${{ vars.AZURE_TENANT_ID }}"
+          azd env set AZURE_LOCATION "$(jq -r '.location' "$config")"
+          azd env set FOUNDRY_PROJECT_ENDPOINT "$(jq -r '.projectEndpoint' "$config")"
+          azd env set AZURE_AI_PROJECT_ID "$(jq -r '.projectResourceId' "$config")"
+          azd env set FOUNDRY_MODEL_NAME "$(jq -r '.modelDeployment' "$config")"
+          azd env set TOOLBOX_NAME "$(jq -r '.toolboxName' "$config")"
+          azd env get-values
+
+      - name: Deploy hosted agent to PROD
+        run: azd deploy --no-prompt
+
+      - name: Show PROD agent status
+        run: azd ai agent show --no-prompt --output json
+
+      - name: Smoke test PROD
+        run: |
+          set -euo pipefail
+          azd ai agent invoke \
+            "Without calling tools, briefly state the two operational modes you support." \
+            --no-prompt \
+            --output raw > /tmp/agent-response.txt
+          grep -q "event: response.completed" /tmp/agent-response.txt
+          ! grep -q "event: response.failed" /tmp/agent-response.txt
+
+      - name: Smoke test PROD ServiceNow connection
+        run: |
+          set -euo pipefail
+          azd ai agent invoke \
+            "Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+            --no-prompt \
+            --output raw > /tmp/servicenow-response.txt
+          grep -q "event: response.completed" /tmp/servicenow-response.txt
+          ! grep -q "event: response.failed" /tmp/servicenow-response.txt
+          ! grep -q "Error: Function failed" /tmp/servicenow-response.txt
+          ! grep -q '"error":{' /tmp/servicenow-response.txt
+          grep -q "SERVICENOW_SMOKE_OK" /tmp/servicenow-response.txt
+
+      - name: Record release
+        run: |
+          echo "Promoted commit \`${{ github.sha }}\` after DEV evaluation." >> "$GITHUB_STEP_SUMMARY"
+          echo "DEV source version: \`${{ needs.deploy-dev.outputs.agent_id }}\`" >> "$GITHUB_STEP_SUMMARY"

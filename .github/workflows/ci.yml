@@ -1,0 +1,59 @@
+name: CI - Validate Agent Changes
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Lint, Test, and Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install validation dependencies
+        run: python -m pip install pytest ruff bandit PyYAML
+
+      - name: Lint
+        run: ruff check src tests scripts
+
+      - name: Security scan
+        run: bandit -r src/support-agent -ll
+
+      - name: Run unit tests
+        run: pytest tests -v
+
+      - name: Validate evaluation dataset
+        run: python -m json.tool evals/release.json > /dev/null
+
+      - name: Install Azure Developer CLI
+        uses: Azure/setup-azd@v2
+
+      - name: Install Foundry extension
+        run: azd ext install microsoft.foundry
+
+      - name: Dry-run hosted-agent configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          azd env new ci --no-prompt
+          azd env set FOUNDRY_PROJECT_ENDPOINT \
+            "https://example.services.ai.azure.com/api/projects/ci"
+          azd env set FOUNDRY_MODEL_NAME "gpt-5.6-sol"
+          azd env set TOOLBOX_NAME "support-agent-tools"
+          azd ai agent doctor --local-only --no-prompt
