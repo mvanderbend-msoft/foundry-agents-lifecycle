@@ -31,6 +31,14 @@ class EvaluationGateTests(unittest.TestCase):
 
         self.assertEqual("Evaluation response", MODULE.extract_response_text(raw))
 
+    def test_uses_event_type_from_data_payload(self):
+        raw = (
+            'data: {"type":"response.output_text.delta","delta":"Evaluation "}\n'
+            'data: {"type":"response.output_text.delta","delta":"response"}'
+        )
+
+        self.assertEqual("Evaluation response", MODULE.extract_response_text(raw))
+
     def test_rejects_empty_response(self):
         with self.assertRaisesRegex(RuntimeError, "without a textual response"):
             MODULE.extract_response_text(

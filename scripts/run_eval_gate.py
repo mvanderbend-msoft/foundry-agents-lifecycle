@@ -35,13 +35,16 @@ def extract_response_text(raw_response: str) -> str:
         except json.JSONDecodeError:
             continue
 
-        if event_name == "response.output_text.delta":
+        payload_event = payload.get("type", event_name)
+        if payload_event == "response.output_text.delta":
             delta = payload.get("delta")
             if isinstance(delta, str):
                 streamed_text.append(delta)
-        elif event_name == "response.completed":
+        elif payload_event == "response.completed":
             response = payload.get("response", payload)
             completed_text.extend(_find_output_text(response.get("output", [])))
+        else:
+            completed_text.extend(_find_output_text(payload))
 
     text = "".join(completed_text).strip()
     if not text:
@@ -153,7 +156,24 @@ def main() -> int:
         query = case["query"]
         expected = case["ground_truth"]
         print(f"Invoking case {index}/{len(cases)}: {query}", flush=True)
-        response = invoke_agent(query, agent_version)
+        try:
+            response = invoke_agent(query, agent_version)
+        except Exception as exc:  # noqa: BLE001
+            error = f"{type(exc).__name__}: {exc}"
+            results.append(
+                {
+                    "query": query,
+                    "evaluators": {
+                        name: {
+                            "passed": False,
+                            "score": None,
+                            "error": error,
+                        }
+                        for name in evaluators
+                    },
+                }
+            )
+            continue
         task_query = f"{query}\n\nRequired behavior for this test: {expected}"
 
         item_results = {}
