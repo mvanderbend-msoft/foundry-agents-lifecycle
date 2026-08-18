@@ -40,8 +40,9 @@ Show `.github/workflows/ci.yml` and the `deploy-dev` job in `.github/workflows/c
 6. Authenticate through the DEV GitHub OIDC identity.
 7. Deploy the pull-request commit to DEV.
 8. Run model and ServiceNow smoke checks.
-9. Score the deployed candidate with Microsoft's Azure AI Evaluation SDK.
-10. Enforce the score and error limits in `evals/thresholds.json`.
+9. Score the deployed candidate with Microsoft's built-in evaluators and the source-controlled `support_quality` and `joke_instruction` custom rubrics.
+10. Show every response and custom-evaluator rationale in the workflow summary.
+11. Enforce the score and error limits in `evals/thresholds.json`.
 
 Discuss the workflow summary and evaluation report.
 

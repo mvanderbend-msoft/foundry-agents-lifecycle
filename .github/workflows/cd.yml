@@ -154,7 +154,9 @@ jobs:
             --project-endpoint "${{ steps.dev-config.outputs.project-endpoint }}" \
             --model-deployment "${{ steps.dev-config.outputs.evaluation-model }}" \
             --responses evaluation-results/dev-responses.json \
-            --output evaluation-results/dev-candidate.json
+            --output evaluation-results/dev-candidate.json \
+            --custom-evaluator "support_quality=src/support-agent/evaluators/SupportAgentHosted-smoke/rubric_dimensions.json" \
+            --custom-evaluator "joke_instruction=src/support-agent/evaluators/joke_instruction/rubric_dimensions.json"
 
       - name: Enforce DEV evaluation thresholds
         run: |

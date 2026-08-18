@@ -125,6 +125,30 @@ def project_resource_endpoint(project_endpoint: str) -> str:
     return project_endpoint.split(marker, maxsplit=1)[0]
 
 
+def load_custom_evaluator_definitions(entries: list[str]) -> dict[str, str]:
+    definitions = {}
+    for entry in entries:
+        name, separator, path_value = entry.partition("=")
+        if not separator or not name or not path_value:
+            raise ValueError(
+                "Custom evaluators must use the <name>=<definition-path> format."
+            )
+        dimensions = json.loads(Path(path_value).read_text(encoding="utf-8"))
+        if not isinstance(dimensions, list) or not dimensions:
+            raise ValueError(f"Custom evaluator {name} has no rubric dimensions.")
+        criteria = []
+        for dimension in dimensions:
+            dimension_id = dimension.get("id")
+            description = dimension.get("description")
+            if not dimension_id or not description:
+                raise ValueError(
+                    f"Custom evaluator {name} has an invalid rubric dimension."
+                )
+            criteria.append(f"- {dimension_id}: {description}")
+        definitions[name] = "\n".join(criteria)
+    return definitions
+
+
 def evaluator_passed(name: str, outcome: dict) -> bool:
     result = outcome.get(f"{name}_result")
     if result is not None:
@@ -206,6 +230,7 @@ def score_responses(
     model_deployment: str,
     responses_path: Path,
     output_path: Path,
+    custom_evaluator_entries: list[str],
 ) -> None:
     from azure.ai.evaluation import (
         FluencyEvaluator,
@@ -221,22 +246,48 @@ def score_responses(
         "azure_deployment": model_deployment,
         "api_version": "2024-10-21",
     }
-    evaluators = {
-        "fluency": FluencyEvaluator(
-            model_config,
-            credential=credential,
-            is_reasoning_model=True,
-        ),
-        "task_adherence": TaskAdherenceEvaluator(
-            model_config,
-            credential=credential,
-            is_reasoning_model=True,
-        ),
-        "violence": ViolenceEvaluator(
-            credential,
-            project_endpoint,
-        ),
+    custom_definitions = load_custom_evaluator_definitions(
+        custom_evaluator_entries
+    )
+    evaluator_specs = {
+        "fluency": {
+            "evaluator": FluencyEvaluator(
+                model_config,
+                credential=credential,
+                is_reasoning_model=True,
+            ),
+            "mode": "fluency",
+            "result_name": "fluency",
+        },
+        "task_adherence": {
+            "evaluator": TaskAdherenceEvaluator(
+                model_config,
+                credential=credential,
+                is_reasoning_model=True,
+            ),
+            "mode": "task_adherence",
+            "result_name": "task_adherence",
+        },
+        "violence": {
+            "evaluator": ViolenceEvaluator(
+                credential,
+                project_endpoint,
+            ),
+            "mode": "violence",
+            "result_name": "violence",
+        },
     }
+    for name, criteria in custom_definitions.items():
+        evaluator_specs[name] = {
+            "evaluator": TaskAdherenceEvaluator(
+                model_config,
+                credential=credential,
+                is_reasoning_model=True,
+            ),
+            "mode": "custom",
+            "result_name": "task_adherence",
+            "criteria": criteria,
+        }
 
     results = []
     for index, case in enumerate(collected["cases"], start=1):
@@ -257,7 +308,7 @@ def score_responses(
                             "score": None,
                             "error": error,
                         }
-                        for name in evaluators
+                        for name in evaluator_specs
                     },
                 }
             )
@@ -267,29 +318,45 @@ def score_responses(
         task_query = f"{query}\n\nRequired behavior for this test: {expected}"
 
         item_results = {}
-        for name, evaluator in evaluators.items():
+        for name, spec in evaluator_specs.items():
+            evaluator = spec["evaluator"]
+            result_name = spec["result_name"]
             try:
                 for attempt in range(1, 4):
-                    if name == "fluency":
+                    if spec["mode"] == "fluency":
                         outcome = evaluator(response=response)
-                    elif name == "task_adherence":
+                    elif spec["mode"] == "task_adherence":
                         outcome = evaluator(
                             query=task_query,
                             response=response,
                             tool_calls=tool_calls,
                         )
+                    elif spec["mode"] == "custom":
+                        custom_query = (
+                            f"{task_query}\n\n"
+                            f"Custom evaluator `{name}` criteria:\n"
+                            f"{spec['criteria']}"
+                        )
+                        outcome = evaluator(
+                            query=custom_query,
+                            response=response,
+                            tool_calls=tool_calls,
+                        )
                     else:
                         outcome = evaluator(query=task_query, response=response)
-                    if evaluator_has_result(name, outcome):
+                    if evaluator_has_result(result_name, outcome):
                         break
                     if attempt < 3:
                         time.sleep(2 * attempt)
                 else:
                     raise RuntimeError(f"{name} evaluator returned no result.")
                 item_results[name] = {
-                    "passed": evaluator_passed(name, outcome),
-                    "score": outcome.get(name, outcome.get(f"{name}_score")),
-                    "reason": outcome.get(f"{name}_reason", ""),
+                    "passed": evaluator_passed(result_name, outcome),
+                    "score": outcome.get(
+                        result_name,
+                        outcome.get(f"{result_name}_score"),
+                    ),
+                    "reason": outcome.get(f"{result_name}_reason", ""),
                 }
             except Exception as exc:  # noqa: BLE001
                 item_results[name] = {
@@ -309,6 +376,7 @@ def score_responses(
 
     report = {
         "agentId": collected["agentId"],
+        "customEvaluators": list(custom_definitions),
         "items": results,
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -404,10 +472,20 @@ def enforce_thresholds(output_path: Path, thresholds_path: Path) -> int:
         f"- Overall: **{overall_rate:.1%}** (minimum {minimum_overall:.1%})",
         f"- Cases with errors: **{errored_cases}**",
         f"- Evaluator errors: **{errored_results}** (maximum {maximum_errors})",
-        "",
-        "| Evaluator | Pass rate | Scored | Errors | Required |",
-        "|---|---:|---:|---:|---:|",
     ]
+    custom_evaluators = report.get("customEvaluators", [])
+    if custom_evaluators:
+        lines.append(
+            "- Custom evaluators: "
+            + ", ".join(f"`{name}`" for name in custom_evaluators)
+        )
+    lines.extend(
+        [
+            "",
+            "| Evaluator | Pass rate | Scored | Errors | Required |",
+            "|---|---:|---:|---:|---:|",
+        ]
+    )
     lines.extend(
         f"| `{name}` | {pass_rate:.1%} | {passed}/{scored} | {errors} | "
         f"{minimum:.1%} |"
@@ -453,6 +531,38 @@ def enforce_thresholds(output_path: Path, thresholds_path: Path) -> int:
             if response := item.get("response"):
                 lines.extend(["", "**Agent response:**", "", f"> {response}"])
 
+    lines.extend(["", "## Case evidence"])
+    for index, item in enumerate(results, start=1):
+        case_passed = all(
+            item["evaluators"][name].get("passed") is True
+            for name in required
+        )
+        lines.extend(
+            [
+                "",
+                "<details>",
+                f"<summary>Case {index} — {'PASS' if case_passed else 'FAIL'}</summary>",
+                "",
+                f"**Query:** {item['query']}",
+            ]
+        )
+        if response := item.get("response"):
+            quoted_response = "\n".join(
+                f"> {line}" for line in response.splitlines()
+            )
+            lines.extend(["", "**Agent response:**", "", quoted_response])
+        if custom_evaluators:
+            lines.extend(["", "**Custom evaluator results:**"])
+            for name in custom_evaluators:
+                result = item["evaluators"][name]
+                status = "PASS" if result.get("passed") is True else "FAIL"
+                detail = result.get("error") or result.get("reason") or "No reason returned."
+                lines.append(
+                    f"- `{name}`: **{status}**, score `{result.get('score')}` — "
+                    f"{detail}"
+                )
+        lines.extend(["", "</details>"])
+
     lines.extend(["", "**Result:** " + ("FAIL" if failures else "PASS")])
     summary = "\n".join(lines)
     print(summary)
@@ -484,6 +594,12 @@ def main() -> int:
     score_parser.add_argument("--model-deployment", required=True)
     score_parser.add_argument("--responses", type=Path, required=True)
     score_parser.add_argument("--output", type=Path, required=True)
+    score_parser.add_argument(
+        "--custom-evaluator",
+        action="append",
+        default=[],
+        help="Custom evaluator in the <name>=<definition-path> format.",
+    )
 
     enforce_parser = subparsers.add_parser("enforce")
     enforce_parser.add_argument("--thresholds", type=Path, required=True)
@@ -505,6 +621,7 @@ def main() -> int:
             args.model_deployment,
             args.responses,
             args.output,
+            args.custom_evaluator,
         )
     else:
         return enforce_thresholds(args.output, args.thresholds)

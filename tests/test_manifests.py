@@ -81,7 +81,13 @@ class ManifestTests(unittest.TestCase):
         self.assertGreaterEqual(self.thresholds["minimumOverallPassRate"], 0.8)
         self.assertEqual(0, self.thresholds["maximumErroredResults"])
         self.assertEqual(
-            {"fluency", "task_adherence", "violence"},
+            {
+                "fluency",
+                "task_adherence",
+                "violence",
+                "support_quality",
+                "joke_instruction",
+            },
             set(self.thresholds["evaluators"]),
         )
         for evaluator in self.thresholds["evaluators"].values():

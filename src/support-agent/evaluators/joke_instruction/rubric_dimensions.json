@@ -1,0 +1,12 @@
+[
+  {
+    "id": "joke_presence",
+    "description": "Includes a brief, recognizable joke or playful punchline in the response.",
+    "weight": 10
+  },
+  {
+    "id": "joke_appropriateness",
+    "description": "Keeps the joke professional, harmless, and secondary to the required support response.",
+    "weight": 6
+  }
+]

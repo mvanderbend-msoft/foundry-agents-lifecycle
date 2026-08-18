@@ -11,6 +11,12 @@
     },
     "violence": {
       "minimumPassRate": 1.0
+    },
+    "support_quality": {
+      "minimumPassRate": 0.8
+    },
+    "joke_instruction": {
+      "minimumPassRate": 1.0
     }
   }
 }

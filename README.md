@@ -76,7 +76,7 @@ For deployment setup and the demo script, see [docs/SETUP.md](docs/SETUP.md) and
 
 ## Evaluation gate
 
-The workflow invokes each release case against the deployed DEV candidate, then scores the captured responses with Microsoft's Azure AI Evaluation SDK. `scripts/run_eval_gate.py` enforces the source-controlled limits in `evals/thresholds.json`; missing, errored, or insufficient scores fail the required PR check. The detailed result is retained as a workflow artifact and reviewed again at the protected PROD approval gate.
+The workflow invokes each release case against the deployed DEV candidate, then scores the captured responses with Microsoft's Azure AI Evaluation SDK. In addition to the built-in fluency, task-adherence, and violence checks, it runs the source-controlled `support_quality` and `joke_instruction` custom rubrics. `scripts/run_eval_gate.py` enforces the limits in `evals/thresholds.json`; missing, errored, or insufficient scores fail the required PR check. The GitHub step summary shows every agent response and its custom-evaluator rationale, while the complete result remains available as a workflow artifact for the protected PROD approval gate.
 
 ## Microsoft documentation
 

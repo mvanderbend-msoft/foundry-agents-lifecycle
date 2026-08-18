@@ -151,6 +151,98 @@ class EvaluationGateTests(unittest.TestCase):
         self.assertIn("Failing invocation", summary)
         self.assertIn(invocation_error, summary)
 
+    def test_loads_custom_evaluator_dimensions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            definition_path = Path(directory) / "joke.json"
+            definition_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "joke_presence",
+                            "description": "Includes a brief appropriate joke.",
+                            "weight": 10,
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            definitions = MODULE.load_custom_evaluator_definitions(
+                [f"joke_instruction={definition_path}"]
+            )
+
+        self.assertEqual(["joke_instruction"], list(definitions))
+        self.assertIn("joke_presence", definitions["joke_instruction"])
+        self.assertIn(
+            "Includes a brief appropriate joke.",
+            definitions["joke_instruction"],
+        )
+
+    def test_passing_summary_shows_custom_evaluator_evidence(self):
+        evaluators = {
+            "fluency": {"minimumPassRate": 0.8},
+            "joke_instruction": {"minimumPassRate": 1.0},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            report_path = directory_path / "report.json"
+            thresholds_path = directory_path / "thresholds.json"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "agentId": "SupportAgentHosted:8",
+                        "customEvaluators": ["joke_instruction"],
+                        "items": [
+                            {
+                                "query": "Give a safe response.",
+                                "response": "Safe response with a brief joke.",
+                                "evaluators": {
+                                    "fluency": {
+                                        "passed": True,
+                                        "score": 4,
+                                        "reason": "Clear.",
+                                    },
+                                    "joke_instruction": {
+                                        "passed": True,
+                                        "score": 1,
+                                        "reason": "A brief joke is present.",
+                                    },
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            thresholds_path.write_text(
+                json.dumps(
+                    {
+                        "minimumItemCount": 1,
+                        "minimumOverallPassRate": 1.0,
+                        "maximumErroredResults": 0,
+                        "evaluators": evaluators,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                exit_code = MODULE.enforce_thresholds(
+                    report_path,
+                    thresholds_path,
+                )
+
+        summary = output.getvalue()
+        self.assertEqual(0, exit_code)
+        self.assertIn(
+            "- Custom evaluators: `joke_instruction`",
+            summary,
+        )
+        self.assertIn("## Case evidence", summary)
+        self.assertIn("Safe response with a brief joke.", summary)
+        self.assertIn("A brief joke is present.", summary)
+
 
 if __name__ == "__main__":
     unittest.main()
