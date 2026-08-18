@@ -1,87 +1,81 @@
-# SupportAgent hosted-agent lifecycle
+# SupportAgent CI/CD lifecycle
 
-This demo adapts the structure from:
+This repository contains a Microsoft Foundry hosted agent and the pipeline that validates, evaluates, and promotes it.
 
-- [CI/CD for AI Agents on Microsoft Foundry](https://techcommunity.microsoft.com/blog/educatordeveloperblog/cicd-for-ai-agents-on-microsoft-foundry/4522218)
-- [foundry-agents-lifecycle](https://github.com/ericchansen/foundry-agents-lifecycle)
-- [foundry-cicd](https://github.com/leestott/foundry-cicd)
+## Agent
 
-It uses Microsoft Learn's current hosted-agent deployment commands rather than the reference repositories' prompt-agent SDK deployment.
+`azure.yaml` deploys `src/support-agent` as the hosted agent `SupportAgentHosted`.
 
-## Lifecycle
-
-```text
-Developer change
-  -> Pull request
-  -> CI: lint, security scan, tests, manifest dry-run
-  -> Deploy pull-request commit to DEV
-  -> DEV smoke test and evaluation (required merge check)
-  -> Merge to main only after DEV passes
-  -> Revalidate the merged commit in DEV
-  -> PROD environment approval
-  -> Deploy the same commit to PROD
-  -> PROD smoke test
-```
-
-There is no test/QA environment. The only deployment environments are `dev` and `prod`.
-
-## Key mental model
-
-The repository is the source of truth:
-
-| Component | Source |
-|---|---|
-| Agent runtime | `src/support-agent/main.py` |
-| Instructions | `src/support-agent/instructions.py` |
-| Tools | `src/support-agent/toolbox.dev.yaml`, `src/support-agent/toolbox.prod.yaml` |
-| Hosted deployment | `azure.yaml` and `src/support-agent/agent.yaml` |
-| Environment values | `config/dev.json` and `config/prod.json` |
-| Evaluation cases | `evals/release.json` |
-| Evaluation thresholds | `evals/thresholds.json` |
-| CI policy | `.github/workflows/ci.yml` |
-| Promotion policy | `.github/workflows/cd.yml` |
-
-Each environment gets a new immutable hosted-agent version created from the same source commit. Environment-specific project IDs, endpoints, and toolboxes are applied from version-controlled configuration.
-
-## Environments
-
-| Environment | Foundry project | Deployment |
-|---|---|---|
-| DEV | `mvanderbend-9174-dev` | Automatic for pull requests and `main` |
-| PROD | `mvanderbend-9174` | Required GitHub Environment approval |
-
-The hosted agent is named `SupportAgentHosted` so it can coexist with the existing prompt agent `SupportAgent:13`.
-
-## Hosted-agent architecture
+The agent uses:
 
 - Microsoft Agent Framework
-- OpenAI Responses protocol
-- Direct code deployment with `azd deploy`
-- Foundry Toolbox
-- Project-scoped ServiceNow connections (`servicenowmcp-dev` and `servicenowmcp`)
-- GitHub OIDC authentication
+- The OpenAI Responses protocol
+- A Foundry Toolbox for ServiceNow and web-search tools
+- Environment-specific Foundry projects and tool connections
 
-`FoundryToolbox` authenticates the hosted agent to Foundry. The toolbox uses the project-specific ServiceNow connection, so credentials aren't placed in code, images, or GitHub.
+The runtime is defined in `main.py`. Behaviour and safety boundaries are defined in `instructions.py`. The DEV and PROD toolbox files select the correct project-scoped ServiceNow connection without storing credentials in the repository.
 
-## Local validation
+## Source of truth
 
-```powershell
-py -3.12 -m pip install pytest ruff bandit PyYAML
-ruff check src tests scripts
-bandit -r src\support-agent -ll
-pytest tests -v
-```
+| Concern | Files |
+|---|---|
+| Hosted deployment | `azure.yaml`, `src/support-agent/agent.yaml` |
+| Runtime | `src/support-agent/main.py`, `requirements.txt`, `Dockerfile` |
+| Behaviour | `src/support-agent/instructions.py` |
+| Tools | `src/support-agent/toolbox.dev.yaml`, `toolbox.prod.yaml` |
+| Environment configuration | `config/dev.json`, `config/prod.json` |
+| Release cases | `evals/release.json` |
+| Release thresholds | `evals/thresholds.json` |
+| Evaluator rubrics | `src/support-agent/evaluators` |
+| CI/CD policy | `.github/workflows/ci.yml`, `.github/workflows/cd.yml` |
 
-For deployment setup and the demo script, see [docs/SETUP.md](docs/SETUP.md) and [docs/DEMO.md](docs/DEMO.md).
+A source commit represents one complete agent candidate. DEV and PROD use different identities, endpoints, and tool connections, but they deploy the same reviewed source.
 
-## Evaluation gate
+## Pull-request flow
 
-The workflow invokes each release case against the deployed DEV candidate, then scores the captured responses with Microsoft's Azure AI Evaluation SDK. In addition to the built-in fluency, task-adherence, and violence checks, it runs the source-controlled `support_quality` and `joke_instruction` custom rubrics. `scripts/run_eval_gate.py` enforces the limits in `evals/thresholds.json`; missing, errored, or insufficient scores fail the required PR check. The GitHub step summary shows every agent response and its custom-evaluator rationale, while the complete result remains available as a workflow artifact for the protected PROD approval gate.
+Every pull request starts two checks.
 
-## Microsoft documentation
+The CI workflow:
 
-- [Hosted-agent CI/CD quickstart](https://learn.microsoft.com/en-gb/azure/foundry/agents/quickstarts/set-up-cicd-hosted-agent)
-- [Use a toolbox with a hosted agent](https://learn.microsoft.com/azure/foundry/agents/how-to/tools/use-toolbox-hosted-agent)
-- [Author `azure.yaml`](https://learn.microsoft.com/azure/foundry/agents/how-to/author-azure-yaml)
-- [Deploy hosted agents from source](https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent-code)
-- [Foundry evaluation GitHub Action](https://learn.microsoft.com/azure/foundry/how-to/evaluation-github-action)
+1. Runs Ruff linting.
+2. Runs a Bandit security scan.
+3. Runs unit and manifest tests.
+4. Validates the evaluation data.
+5. Runs the local hosted-agent configuration doctor.
+
+The deployment workflow:
+
+1. Authenticates to Azure through GitHub OIDC.
+2. Deploys the pull-request commit to the DEV Foundry project.
+3. Verifies the hosted-agent status.
+4. Runs agent and ServiceNow smoke tests.
+5. Invokes every release case against the deployed candidate.
+6. Scores the captured responses.
+7. Enforces the release thresholds.
+
+The DEV deployment and evaluation job is a required merge check.
+
+## Evaluation
+
+`scripts/run_eval_gate.py` owns the evaluation sequence:
+
+1. `warm` confirms that the deployed endpoint is ready.
+2. `collect` invokes the exact deployed agent version and stores its responses.
+3. `score` uses the Azure AI Evaluation SDK to run fluency, task-adherence, and violence evaluators.
+4. `score` also runs the source-controlled `support_quality` and `joke_instruction` custom rubrics.
+5. `enforce` compares the results with `evals/thresholds.json`.
+
+Invocation errors are reported separately from evaluator failures. The GitHub summary includes each test request, the agent response, custom evaluator results, scores, and reasons. The complete JSON report is uploaded as a workflow artifact.
+
+## Production promotion
+
+After a pull request is merged, the merged commit is deployed and evaluated in DEV again.
+
+If it passes:
+
+1. The workflow waits for approval on the protected `prod` GitHub Environment.
+2. The same commit is deployed to the PROD Foundry project.
+3. A new immutable hosted-agent version is created.
+4. PROD agent and ServiceNow smoke tests verify the deployment.
+
+There is no intermediate test environment. Promotion is DEV to approved PROD.
