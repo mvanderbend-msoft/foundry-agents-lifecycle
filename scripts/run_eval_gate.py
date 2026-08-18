@@ -15,6 +15,7 @@ def extract_response(output: str) -> tuple[str, list[dict]]:
     streamed_text = []
     event_types = Counter()
     tool_calls = {}
+    response_failures = []
     for raw_line in output.splitlines():
         line = raw_line.lstrip("\ufeff \t")
         data_index = line.find("data:")
@@ -28,7 +29,20 @@ def extract_response(output: str) -> tuple[str, list[dict]]:
         event_type = payload.get("type")
         if isinstance(event_type, str):
             event_types[event_type] += 1
-        if event_type == "response.output_text.done":
+        if event_type == "response.failed":
+            error = payload.get("response", {}).get("error") or payload.get("error")
+            if isinstance(error, dict):
+                code = error.get("code")
+                message = error.get("message")
+                if code and message:
+                    response_failures.append(f"{code}: {message}")
+                elif message:
+                    response_failures.append(str(message))
+                elif code:
+                    response_failures.append(str(code))
+            elif error:
+                response_failures.append(str(error))
+        elif event_type == "response.output_text.done":
             text = payload.get("text")
             if isinstance(text, str):
                 completed_text.append(text)
@@ -47,9 +61,13 @@ def extract_response(output: str) -> tuple[str, list[dict]]:
     if not text:
         text = "".join(streamed_text).strip()
     if not text:
+        failure_detail = (
+            f" Failure: {'; '.join(response_failures)}." if response_failures else ""
+        )
         raise RuntimeError(
             "Hosted agent completed without a textual response; "
             f"captured {len(output)} characters and events {dict(event_types)}."
+            f"{failure_detail}"
         )
     return text, list(tool_calls.values())
 
@@ -232,6 +250,7 @@ def score_responses(
             results.append(
                 {
                     "query": query,
+                    "invocationError": error,
                     "evaluators": {
                         name: {
                             "passed": False,
@@ -282,6 +301,8 @@ def score_responses(
         results.append(
             {
                 "query": query,
+                "response": response,
+                "toolCalls": tool_calls,
                 "evaluators": item_results,
             }
         )
@@ -306,25 +327,47 @@ def enforce_thresholds(output_path: Path, thresholds_path: Path) -> int:
 
     required = thresholds["evaluators"]
     passes_by_evaluator = defaultdict(list)
+    errors_by_evaluator = Counter()
     errored_results = 0
+    errored_cases = 0
     overall_passes = 0
     for item in results:
         item_passed = True
+        item_errored = False
         for evaluator_name in required:
             result = item["evaluators"][evaluator_name]
+            if "error" in result:
+                errors_by_evaluator[evaluator_name] += 1
+                errored_results += 1
+                item_errored = True
+                item_passed = False
+                continue
             passed = result["passed"] is True
             passes_by_evaluator[evaluator_name].append(passed)
             item_passed = item_passed and passed
-            errored_results += int("error" in result)
+        errored_cases += int(item_errored)
         overall_passes += int(item_passed)
 
     failures = []
     summary_rows = []
     for evaluator_name, evaluator_thresholds in required.items():
         evaluator_results = passes_by_evaluator[evaluator_name]
-        pass_rate = sum(evaluator_results) / len(evaluator_results)
+        pass_rate = (
+            sum(evaluator_results) / len(evaluator_results)
+            if evaluator_results
+            else 0.0
+        )
         minimum = evaluator_thresholds["minimumPassRate"]
-        summary_rows.append((evaluator_name, pass_rate, minimum))
+        summary_rows.append(
+            (
+                evaluator_name,
+                pass_rate,
+                sum(evaluator_results),
+                len(evaluator_results),
+                errors_by_evaluator[evaluator_name],
+                minimum,
+            )
+        )
         if pass_rate < minimum:
             failures.append(
                 f"{evaluator_name} pass rate {pass_rate:.1%} is below {minimum:.1%}"
@@ -347,6 +390,7 @@ def enforce_thresholds(output_path: Path, thresholds_path: Path) -> int:
         {
             "overallPassRate": overall_rate,
             "erroredResults": errored_results,
+            "erroredCases": errored_cases,
             "failures": failures,
         }
     )
@@ -358,15 +402,57 @@ def enforce_thresholds(output_path: Path, thresholds_path: Path) -> int:
         f"- Agent: `{report['agentId']}`",
         f"- Cases: **{len(results)}**",
         f"- Overall: **{overall_rate:.1%}** (minimum {minimum_overall:.1%})",
+        f"- Cases with errors: **{errored_cases}**",
         f"- Evaluator errors: **{errored_results}** (maximum {maximum_errors})",
         "",
-        "| Evaluator | Pass rate | Required |",
-        "|---|---:|---:|",
+        "| Evaluator | Pass rate | Scored | Errors | Required |",
+        "|---|---:|---:|---:|---:|",
     ]
     lines.extend(
-        f"| `{name}` | {pass_rate:.1%} | {minimum:.1%} |"
-        for name, pass_rate, minimum in summary_rows
+        f"| `{name}` | {pass_rate:.1%} | {passed}/{scored} | {errors} | "
+        f"{minimum:.1%} |"
+        for name, pass_rate, passed, scored, errors, minimum in summary_rows
     )
+    failed_items = [
+        (index, item)
+        for index, item in enumerate(results, start=1)
+        if not all(
+            item["evaluators"][name].get("passed") is True
+            for name in required
+        )
+    ]
+    if failed_items:
+        lines.extend(["", "## Failed cases"])
+        for index, item in failed_items:
+            lines.extend(["", f"### Case {index}", "", f"**Query:** {item['query']}"])
+            invocation_error = item.get("invocationError")
+            if invocation_error:
+                lines.extend(["", f"**Invocation error:** `{invocation_error}`"])
+                continue
+
+            errors = {
+                result["error"]
+                for result in item["evaluators"].values()
+                if "error" in result
+            }
+            if len(errors) == 1 and all(
+                "error" in result for result in item["evaluators"].values()
+            ):
+                lines.extend(["", f"**Evaluation error:** `{errors.pop()}`"])
+                continue
+
+            for name in required:
+                result = item["evaluators"][name]
+                if result.get("passed") is True:
+                    continue
+                detail = result.get("error") or result.get("reason") or "No reason returned."
+                score = result.get("score")
+                lines.append(
+                    f"- **{name}:** score `{score}` — {detail}"
+                )
+            if response := item.get("response"):
+                lines.extend(["", "**Agent response:**", "", f"> {response}"])
+
     lines.extend(["", "**Result:** " + ("FAIL" if failures else "PASS")])
     summary = "\n".join(lines)
     print(summary)
