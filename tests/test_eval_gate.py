@@ -156,13 +156,16 @@ class EvaluationGateTests(unittest.TestCase):
             definition_path = Path(directory) / "joke.json"
             definition_path.write_text(
                 json.dumps(
-                    [
-                        {
-                            "id": "joke_presence",
-                            "description": "Includes a brief appropriate joke.",
-                            "weight": 10,
-                        }
-                    ]
+                    {
+                        "includeUserQuery": False,
+                        "dimensions": [
+                            {
+                                "id": "joke_presence",
+                                "description": "Includes a brief appropriate joke.",
+                                "weight": 10,
+                            }
+                        ],
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -172,11 +175,29 @@ class EvaluationGateTests(unittest.TestCase):
             )
 
         self.assertEqual(["joke_instruction"], list(definitions))
-        self.assertIn("joke_presence", definitions["joke_instruction"])
+        self.assertFalse(definitions["joke_instruction"]["includeUserQuery"])
+        self.assertIn(
+            "joke_presence",
+            definitions["joke_instruction"]["criteria"],
+        )
         self.assertIn(
             "Includes a brief appropriate joke.",
-            definitions["joke_instruction"],
+            definitions["joke_instruction"]["criteria"],
         )
+
+    def test_joke_evaluator_query_excludes_support_task(self):
+        evaluator_query = MODULE.build_custom_evaluator_query(
+            "joke_instruction",
+            {
+                "includeUserQuery": False,
+                "criteria": "- joke_presence: Includes a recognizable joke.",
+            },
+            "Handle a sales engagement gate with no customer.",
+        )
+
+        self.assertIn("Evaluate only the custom rubric", evaluator_query)
+        self.assertIn("joke_presence", evaluator_query)
+        self.assertNotIn("sales engagement gate", evaluator_query)
 
     def test_passing_summary_shows_custom_evaluator_evidence(self):
         evaluators = {

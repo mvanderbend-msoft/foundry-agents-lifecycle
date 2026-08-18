@@ -125,7 +125,7 @@ def project_resource_endpoint(project_endpoint: str) -> str:
     return project_endpoint.split(marker, maxsplit=1)[0]
 
 
-def load_custom_evaluator_definitions(entries: list[str]) -> dict[str, str]:
+def load_custom_evaluator_definitions(entries: list[str]) -> dict[str, dict]:
     definitions = {}
     for entry in entries:
         name, separator, path_value = entry.partition("=")
@@ -133,7 +133,15 @@ def load_custom_evaluator_definitions(entries: list[str]) -> dict[str, str]:
             raise ValueError(
                 "Custom evaluators must use the <name>=<definition-path> format."
             )
-        dimensions = json.loads(Path(path_value).read_text(encoding="utf-8"))
+        raw_definition = json.loads(
+            Path(path_value).read_text(encoding="utf-8")
+        )
+        if isinstance(raw_definition, dict):
+            dimensions = raw_definition.get("dimensions")
+            include_user_query = raw_definition.get("includeUserQuery", True)
+        else:
+            dimensions = raw_definition
+            include_user_query = True
         if not isinstance(dimensions, list) or not dimensions:
             raise ValueError(f"Custom evaluator {name} has no rubric dimensions.")
         criteria = []
@@ -145,8 +153,35 @@ def load_custom_evaluator_definitions(entries: list[str]) -> dict[str, str]:
                     f"Custom evaluator {name} has an invalid rubric dimension."
                 )
             criteria.append(f"- {dimension_id}: {description}")
-        definitions[name] = "\n".join(criteria)
+        definitions[name] = {
+            "criteria": "\n".join(criteria),
+            "includeUserQuery": include_user_query,
+        }
     return definitions
+
+
+def build_custom_evaluator_query(
+    name: str,
+    definition: dict,
+    user_query: str,
+) -> str:
+    lines = [
+        f"Evaluate only the custom rubric `{name}`.",
+        "Do not score general task correctness unless a rubric dimension requires it.",
+        "The candidate passes only when every rubric dimension is satisfied.",
+        "",
+        "Rubric dimensions:",
+        definition["criteria"],
+    ]
+    if definition["includeUserQuery"]:
+        lines.extend(
+            [
+                "",
+                "Original user request (context only):",
+                user_query,
+            ]
+        )
+    return "\n".join(lines)
 
 
 def evaluator_passed(name: str, outcome: dict) -> bool:
@@ -277,7 +312,7 @@ def score_responses(
             "result_name": "violence",
         },
     }
-    for name, criteria in custom_definitions.items():
+    for name, definition in custom_definitions.items():
         evaluator_specs[name] = {
             "evaluator": TaskAdherenceEvaluator(
                 model_config,
@@ -286,7 +321,7 @@ def score_responses(
             ),
             "mode": "custom",
             "result_name": "task_adherence",
-            "criteria": criteria,
+            "definition": definition,
         }
 
     results = []
@@ -332,10 +367,10 @@ def score_responses(
                             tool_calls=tool_calls,
                         )
                     elif spec["mode"] == "custom":
-                        custom_query = (
-                            f"{task_query}\n\n"
-                            f"Custom evaluator `{name}` criteria:\n"
-                            f"{spec['criteria']}"
+                        custom_query = build_custom_evaluator_query(
+                            name,
+                            spec["definition"],
+                            query,
                         )
                         outcome = evaluator(
                             query=custom_query,
