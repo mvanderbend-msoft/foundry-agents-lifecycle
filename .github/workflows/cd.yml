@@ -13,15 +13,14 @@ permissions:
   id-token: write
   contents: read
 
-concurrency:
-  group: support-agent-release
-  cancel-in-progress: false
-
 jobs:
   deploy-dev:
     name: Deploy and Evaluate DEV
     runs-on: ubuntu-latest
     environment: dev
+    concurrency:
+      group: support-agent-dev
+      cancel-in-progress: false
     outputs:
       agent_id: ${{ steps.agent.outputs.agent-id }}
 
@@ -178,6 +177,9 @@ jobs:
       - deploy-dev
     runs-on: ubuntu-latest
     environment: prod
+    concurrency:
+      group: support-agent-prod
+      cancel-in-progress: false
 
     steps:
       - name: Checkout evaluated commit
