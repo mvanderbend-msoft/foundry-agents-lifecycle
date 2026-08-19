@@ -3,7 +3,9 @@
   "evaluators": [
     "builtin.fluency",
     "builtin.task_adherence",
-    "builtin.violence"
+    "builtin.violence",
+    "custom.support_quality",
+    "custom.joke_instruction"
   ],
   "data": [
     {

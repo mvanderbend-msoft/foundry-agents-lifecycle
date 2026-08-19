@@ -13,15 +13,14 @@ permissions:
   id-token: write
   contents: read
 
-concurrency:
-  group: support-agent-release
-  cancel-in-progress: false
-
 jobs:
   deploy-dev:
     name: Deploy and Evaluate DEV
     runs-on: ubuntu-latest
     environment: dev
+    concurrency:
+      group: support-agent-dev
+      cancel-in-progress: false
     outputs:
       agent_id: ${{ steps.agent.outputs.agent-id }}
 
@@ -81,42 +80,17 @@ jobs:
 
       - name: Smoke test DEV
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if azd ai agent invoke \
-              "Without calling tools, briefly state the two operational modes you support." \
-              --new-session \
-              --no-prompt \
-              --output raw > /tmp/agent-response.txt &&
-              grep -q "event: response.completed" /tmp/agent-response.txt &&
-              ! grep -q "event: response.failed" /tmp/agent-response.txt; then
-              exit 0
-            fi
-            sleep $((attempt * 5))
-          done
-          cat /tmp/agent-response.txt
-          exit 1
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/agent-response.txt \
+            "" \
+            "Without calling tools, briefly state the two operational modes you support."
 
       - name: Smoke test DEV ServiceNow connection
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if azd ai agent invoke \
-              "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
-              --new-session \
-              --no-prompt \
-              --output raw > /tmp/servicenow-response.txt &&
-              grep -q "event: response.completed" /tmp/servicenow-response.txt &&
-              ! grep -q "event: response.failed" /tmp/servicenow-response.txt &&
-              ! grep -q "Error: Function failed" /tmp/servicenow-response.txt &&
-              ! grep -q '"error":{' /tmp/servicenow-response.txt &&
-              grep -q "SERVICENOW_SMOKE_OK" /tmp/servicenow-response.txt; then
-              exit 0
-            fi
-            sleep $((attempt * 5))
-          done
-          cat /tmp/servicenow-response.txt
-          exit 1
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/servicenow-response.txt \
+            "SERVICENOW_SMOKE_OK" \
+            "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything."
 
       - name: Resolve DEV agent version
         id: agent
@@ -132,30 +106,25 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Microsoft evaluation SDK
-        run: python -m pip install "azure-ai-evaluation==1.16.5" "azure-identity==1.25.3"
-
-      - name: Warm up DEV evaluation endpoint
+      - name: Install Microsoft Foundry SDK
         run: |
-          python scripts/run_eval_gate.py warm \
-            --project-endpoint "${{ steps.dev-config.outputs.project-endpoint }}" \
-            --agent-id "${{ steps.agent.outputs.agent-id }}"
+          python -m pip install \
+            "azure-ai-projects>=2.4.0,<3.0.0" \
+            "azure-identity==1.25.3" \
+            "httpx>=0.27.0,<1.0.0"
+          python -c "from azure.ai.projects import AIProjectClient; from openai.types.eval_create_params import DataSourceConfigCustom"
 
-      - name: Collect DEV evaluation responses
+      - name: Run DEV Foundry cloud evaluation
         run: |
-          python scripts/run_eval_gate.py collect \
-            --project-endpoint "${{ steps.dev-config.outputs.project-endpoint }}" \
-            --agent-id "${{ steps.agent.outputs.agent-id }}" \
-            --dataset evals/release.json \
-            --responses evaluation-results/dev-responses.json
-
-      - name: Score DEV responses with Microsoft evaluators
-        run: |
-          python scripts/run_eval_gate.py score \
+          python scripts/run_eval_gate.py cloud \
             --project-endpoint "${{ steps.dev-config.outputs.project-endpoint }}" \
             --model-deployment "${{ steps.dev-config.outputs.evaluation-model }}" \
-            --responses evaluation-results/dev-responses.json \
-            --output evaluation-results/dev-candidate.json
+            --agent-id "${{ steps.agent.outputs.agent-id }}" \
+            --dataset evals/release.json \
+            --dataset-version "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --output evaluation-results/dev-candidate.json \
+            --custom-evaluator "support_quality=src/support-agent/evaluators/SupportAgentHosted-smoke/rubric_dimensions.json" \
+            --custom-evaluator "joke_instruction=src/support-agent/evaluators/joke_instruction/rubric_dimensions.json"
 
       - name: Enforce DEV evaluation thresholds
         run: |
@@ -178,6 +147,9 @@ jobs:
       - deploy-dev
     runs-on: ubuntu-latest
     environment: prod
+    concurrency:
+      group: support-agent-prod
+      cancel-in-progress: false
 
     steps:
       - name: Checkout evaluated commit
