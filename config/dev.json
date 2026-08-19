@@ -4,8 +4,8 @@
   "location": "swedencentral",
   "projectEndpoint": "https://mvanderbend-9174-resource.services.ai.azure.com/api/projects/mvanderbend-9174-dev",
   "projectResourceId": "/subscriptions/78bdf401-d648-4553-a6d0-68fdac0ef440/resourceGroups/michael-eu/providers/Microsoft.CognitiveServices/accounts/mvanderbend-9174-resource/projects/mvanderbend-9174-dev",
-  "modelDeployment": "gpt-5.6-sol",
-  "evaluationModelDeployment": "gpt-5.6-sol",
+  "modelDeployment": "gpt-5.6-sol-2",
+  "evaluationModelDeployment": "gpt-5.6-sol-2",
   "toolboxName": "support-agent-tools",
   "toolboxDefinition": "src/support-agent/toolbox.dev.yaml",
   "serviceNowConnection": "servicenowmcp-dev"

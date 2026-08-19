@@ -5,7 +5,7 @@ set -euo pipefail
 output_path="$1"
 expected_text="$2"
 prompt="$3"
-max_attempts="${SMOKE_MAX_ATTEMPTS:-10}"
+max_attempts="${SMOKE_MAX_ATTEMPTS:-6}"
 base_delay="${SMOKE_RETRY_BASE_SECONDS:-15}"
 max_delay="${SMOKE_RETRY_MAX_SECONDS:-120}"
 azd_command="${AZD_COMMAND:-azd}"
