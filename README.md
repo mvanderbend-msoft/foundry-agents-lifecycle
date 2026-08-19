@@ -49,9 +49,9 @@ The deployment workflow:
 2. Deploys the pull-request commit to the DEV Foundry project.
 3. Verifies the hosted-agent status.
 4. Runs agent and ServiceNow smoke tests.
-5. Invokes every release case against the deployed candidate.
-6. Scores the captured responses.
-7. Enforces the release thresholds.
+5. Uploads a versioned release dataset and source-controlled rubrics to Foundry.
+6. Runs a Foundry cloud evaluation against the exact deployed agent version.
+7. Enforces the repository release thresholds against the cloud results.
 
 The DEV deployment and evaluation job is a required merge check.
 
@@ -59,13 +59,13 @@ The DEV deployment and evaluation job is a required merge check.
 
 `scripts/run_eval_gate.py` owns the evaluation sequence:
 
-1. `warm` confirms that the deployed endpoint is ready.
-2. `collect` invokes the exact deployed agent version and stores its responses.
-3. `score` uses the Azure AI Evaluation SDK to run fluency, task-adherence, and violence evaluators.
-4. `score` also runs the source-controlled `support_quality` and `joke_instruction` custom rubrics.
-5. `enforce` compares the results with `evals/thresholds.json`.
+1. `cloud` converts `evals/release.json` to JSONL and uploads a versioned Foundry dataset.
+2. `cloud` creates Foundry rubric-evaluator versions from the source-controlled `support_quality` and `joke_instruction` definitions.
+3. `cloud` creates a project-managed evaluation using fluency, task-adherence, violence, and both custom rubrics.
+4. Foundry invokes the exact deployed hosted-agent version and stores aggregate and row-level results in the project.
+5. `enforce` compares the cloud results with `evals/thresholds.json`.
 
-Invocation errors are reported separately from evaluator failures. The GitHub summary includes each test request, the agent response, custom evaluator results, scores, and reasons. The complete JSON report is uploaded as a workflow artifact.
+The GitHub summary links to the Foundry Portal report and includes each test request, the agent response, custom evaluator results, scores, and reasons. The complete normalized JSON report is also uploaded as a workflow artifact.
 
 ## Production promotion
 
