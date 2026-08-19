@@ -80,42 +80,17 @@ jobs:
 
       - name: Smoke test DEV
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if azd ai agent invoke \
-              "Without calling tools, briefly state the two operational modes you support." \
-              --new-session \
-              --no-prompt \
-              --output raw > /tmp/agent-response.txt &&
-              grep -q "event: response.completed" /tmp/agent-response.txt &&
-              ! grep -q "event: response.failed" /tmp/agent-response.txt; then
-              exit 0
-            fi
-            sleep $((attempt * 5))
-          done
-          cat /tmp/agent-response.txt
-          exit 1
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/agent-response.txt \
+            "" \
+            "Without calling tools, briefly state the two operational modes you support."
 
       - name: Smoke test DEV ServiceNow connection
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if azd ai agent invoke \
-              "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
-              --new-session \
-              --no-prompt \
-              --output raw > /tmp/servicenow-response.txt &&
-              grep -q "event: response.completed" /tmp/servicenow-response.txt &&
-              ! grep -q "event: response.failed" /tmp/servicenow-response.txt &&
-              ! grep -q "Error: Function failed" /tmp/servicenow-response.txt &&
-              ! grep -q '"error":{' /tmp/servicenow-response.txt &&
-              grep -q "SERVICENOW_SMOKE_OK" /tmp/servicenow-response.txt; then
-              exit 0
-            fi
-            sleep $((attempt * 5))
-          done
-          cat /tmp/servicenow-response.txt
-          exit 1
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/servicenow-response.txt \
+            "SERVICENOW_SMOKE_OK" \
+            "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything."
 
       - name: Resolve DEV agent version
         id: agent
