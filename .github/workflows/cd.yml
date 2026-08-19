@@ -107,7 +107,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install Microsoft Foundry SDK
-        run: python -m pip install "azure-ai-projects>=2.4.0,<3.0.0" "azure-identity==1.25.3"
+        run: |
+          python -m pip install \
+            "azure-ai-projects>=2.4.0,<3.0.0" \
+            "azure-identity==1.25.3" \
+            "httpx>=0.27.0,<1.0.0"
+          python -c "from azure.ai.projects import AIProjectClient; from openai.types.eval_create_params import DataSourceConfigCustom"
 
       - name: Run DEV Foundry cloud evaluation
         run: |
