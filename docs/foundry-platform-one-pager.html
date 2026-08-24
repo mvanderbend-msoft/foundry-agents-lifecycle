@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microsoft Foundry learning map and evaluation tools</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+    }
+
+    a {
+      color: var(--cp-link);
+      text-underline-offset: 3px;
+    }
+
+    a:hover {
+      color: var(--cp-accent);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    code {
+      padding: 2px 6px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      font-family: Consolas, "Courier New", Courier, monospace;
+      font-size: 0.88em;
+    }
+
+    .shell {
+      width: min(1360px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid var(--cp-border);
+      background: var(--cp-overlay);
+      backdrop-filter: blur(12px);
+    }
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 60px;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cp-text);
+      font-weight: 750;
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      width: 26px;
+      height: 26px;
+      border: 7px solid var(--cp-accent);
+      border-radius: 0.625rem;
+      transform: rotate(8deg);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action {
+      padding: 8px 12px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface);
+      color: var(--cp-text);
+      cursor: pointer;
+    }
+
+    .action:hover {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent-soft);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.6fr);
+      gap: 28px;
+      padding: 52px 0 32px;
+    }
+
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--cp-accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 900px;
+      margin-bottom: 16px;
+      font-size: clamp(2.4rem, 5vw, 4.6rem);
+      line-height: 0.98;
+      letter-spacing: -0.045em;
+    }
+
+    .hero-copy {
+      max-width: 820px;
+      color: var(--cp-text-soft);
+      font-size: 1.08rem;
+    }
+
+    .hero-aside {
+      align-self: end;
+      padding: 20px;
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      background: var(--cp-surface);
+    }
+
+    .hero-aside p {
+      margin-bottom: 0;
+      color: var(--cp-text-muted);
+    }
+
+    .qr-layout {
+      display: grid;
+      grid-template-columns: 132px minmax(0, 1fr);
+      align-items: center;
+      gap: 16px;
+    }
+
+    .qr-image {
+      display: block;
+      width: 132px;
+      height: 132px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+    }
+
+    .qr-copy strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .qr-copy p {
+      margin-bottom: 8px;
+      font-size: 0.88rem;
+    }
+
+    .qr-copy a {
+      font-size: 0.78rem;
+      overflow-wrap: anywhere;
+    }
+
+    .section {
+      margin: 28px 0 52px;
+      scroll-margin-top: 80px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--cp-border);
+    }
+
+    .section-header h2 {
+      margin-bottom: 0;
+      font-size: clamp(1.7rem, 3vw, 2.4rem);
+      letter-spacing: -0.025em;
+    }
+
+    .section-header p {
+      max-width: 620px;
+      margin-bottom: 0;
+      color: var(--cp-text-muted);
+      text-align: right;
+    }
+
+    .map {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .map::before {
+      position: absolute;
+      top: 23px;
+      right: 8%;
+      left: 8%;
+      height: 2px;
+      background: var(--cp-border-strong);
+      content: "";
+    }
+
+    .stage {
+      position: relative;
+      min-width: 0;
+      padding-top: 50px;
+    }
+
+    .stage-number {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      z-index: 2;
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      border: 3px solid var(--cp-bg);
+      border-radius: 0.625rem;
+      background: var(--cp-accent);
+      color: var(--cp-accent-fg);
+      font-size: 0.82rem;
+      font-weight: 800;
+      transform: translateX(-50%);
+    }
+
+    .stage-card,
+    .eval-panel {
+      border: 1px solid var(--cp-border);
+      border-radius: 16px;
+      background: var(--cp-surface);
+      box-shadow: 0 0 0 1px var(--cp-sheen);
+    }
+
+    .stage-card {
+      height: 100%;
+      padding: 20px;
+    }
+
+    .stage-card h3 {
+      margin-bottom: 6px;
+      font-size: 1.25rem;
+    }
+
+    .stage-card > p {
+      min-height: 64px;
+      color: var(--cp-text-muted);
+      font-size: 0.9rem;
+    }
+
+    .topic {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--cp-border);
+    }
+
+    .topic strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--cp-text);
+      font-size: 0.9rem;
+    }
+
+    .resource-link {
+      display: block;
+      margin: 7px 0;
+      font-size: 0.84rem;
+      line-height: 1.35;
+    }
+
+    .resource-link::after {
+      content: " \2197";
+    }
+
+    .learning-card {
+      margin-top: 14px;
+      padding: 12px;
+      border: 1px solid var(--cp-accent);
+      border-radius: 0.625rem;
+      background: var(--cp-accent-soft);
+    }
+
+    .learning-card .type {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--cp-accent);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .learning-card a {
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .learning-card p {
+      margin: 7px 0 0;
+      color: var(--cp-text-muted);
+      font-size: 0.8rem;
+    }
+
+    .eval-panel {
+      padding: 24px;
+    }
+
+    .eval-panel h2 {
+      margin-bottom: 8px;
+      font-size: clamp(1.7rem, 3vw, 2.4rem);
+      letter-spacing: -0.025em;
+    }
+
+    .eval-panel > p {
+      max-width: 900px;
+      color: var(--cp-text-muted);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 20px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--cp-surface);
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--cp-border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--cp-surface-soft);
+      color: var(--cp-text);
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .tool-name {
+      min-width: 170px;
+      color: var(--cp-text);
+      font-weight: 750;
+    }
+
+    .eval-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--cp-border);
+      font-size: 0.88rem;
+    }
+
+    .eval-links a::after {
+      content: " \2197";
+    }
+
+    .training-strip {
+      display: grid;
+      grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .training-item {
+      padding: 16px;
+      border: 1px solid var(--cp-border);
+      border-radius: 0.625rem;
+      background: var(--cp-surface-soft);
+    }
+
+    .training-item.primary {
+      border-color: var(--cp-accent);
+      background: var(--cp-accent-soft);
+    }
+
+    .training-item span {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--cp-accent);
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .training-item a {
+      font-size: 0.86rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 24px 0 40px;
+      border-top: 1px solid var(--cp-border);
+      color: var(--cp-text-muted);
+      font-size: 0.82rem;
+    }
+
+    @media (max-width: 1100px) {
+      .map {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .map::before,
+      .stage-number {
+        display: none;
+      }
+
+      .stage {
+        padding-top: 0;
+      }
+
+      .training-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100% - 20px, 1360px);
+      }
+
+      .brand span:last-child {
+        display: none;
+      }
+
+      .hero,
+      .map,
+      .training-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        padding-top: 32px;
+      }
+
+      .section-header {
+        display: block;
+      }
+
+      .section-header p {
+        margin-top: 8px;
+        text-align: left;
+      }
+
+      .qr-layout {
+        grid-template-columns: 112px minmax(0, 1fr);
+      }
+
+      .qr-image {
+        width: 112px;
+        height: 112px;
+      }
+
+      .footer {
+        display: block;
+      }
+    }
+
+    @media print {
+      .topbar {
+        display: none;
+      }
+
+      body {
+        background: var(--cp-surface);
+      }
+
+      .shell {
+        width: 100%;
+      }
+
+      .hero {
+        padding-top: 16px;
+      }
+
+      .stage-card,
+      .eval-panel,
+      .training-item {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>Microsoft Foundry map</span>
+      </a>
+      <div class="actions">
+        <button class="action" id="theme-toggle" type="button">Switch theme</button>
+        <button class="action" id="print-page" type="button">Print / PDF</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell" id="top">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Microsoft Learn field guide</div>
+        <h1>Foundry learning map</h1>
+        <p class="hero-copy">
+          A compact path through Microsoft Foundry: understand the platform, discover models,
+          build and evaluate agents, then operate them at scale. The map links directly to
+          Microsoft Learn documentation and training.
+        </p>
+      </div>
+      <aside class="hero-aside">
+        <div class="qr-layout">
+          <a href="https://mvanderbend-msoft.github.io/foundry-agents-lifecycle/foundry-platform-one-pager.html">
+            <img
+              class="qr-image"
+              src="foundry-learning-map-qr.svg"
+              alt="QR code that opens this Microsoft Foundry learning map">
+          </a>
+          <div class="qr-copy">
+            <strong>Open this map</strong>
+            <p>Scan to open the same page on GitHub Pages.</p>
+            <a href="https://mvanderbend-msoft.github.io/foundry-agents-lifecycle/foundry-platform-one-pager.html">
+              mvanderbend-msoft.github.io/foundry-agents-lifecycle/
+            </a>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section" id="map">
+      <header class="section-header">
+        <div>
+          <div class="eyebrow">Documentation and training</div>
+          <h2>Platform map</h2>
+        </div>
+        <p>Official Microsoft Learn resources grouped by the lifecycle stage where they are most useful.</p>
+      </header>
+
+      <div class="map">
+        <article class="stage">
+          <span class="stage-number">1</span>
+          <div class="stage-card">
+            <h3>Discover</h3>
+            <p>Learn the resource hierarchy, compare models, and choose deployment and capacity options.</p>
+
+            <div class="topic">
+              <strong>Platform and organisation</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/what-is-foundry">What is Microsoft Foundry?</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/concepts/architecture">Microsoft Foundry architecture</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/how-to/create-projects#create-multiple-projects-on-the-same-resource">Create multiple projects</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/concepts/planning#choose-foundry-resource-topology">Plan a Foundry resource topology</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/concepts/authentication-authorization-foundry">Authentication and authorization</a>
+            </div>
+
+            <div class="topic">
+              <strong>Models and deployment</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/concepts/foundry-models-overview">Foundry Models overview</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/how-to/benchmark-model-in-catalog">Compare models with the leaderboard</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/foundry-models/concepts/deployment-types">Model deployment types</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/openai/concepts/provisioned-throughput">Provisioned throughput</a>
+            </div>
+
+            <div class="learning-card">
+              <span class="type">Training catalog</span>
+              <a href="https://learn.microsoft.com/en-us/training/browse/?products=microsoft-foundry">Browse Microsoft Foundry training</a>
+              <p>Filter the full Microsoft Learn catalog by level, role, and content type.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage">
+          <span class="stage-number">2</span>
+          <div class="stage-card">
+            <h3>Build</h3>
+            <p>Choose prompt or hosted agents, connect tools and knowledge, and build in VS Code.</p>
+
+            <div class="topic">
+              <strong>Agents and developer workflow</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/agents/overview">Agents in Microsoft Foundry</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agents">Hosted agents concepts</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/agents/how-to/vs-code-agents-workflow-pro-code">Foundry Toolkit for VS Code workflow</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/how-to/develop/sdk-overview">Foundry SDKs and endpoints</a>
+            </div>
+
+            <div class="topic">
+              <strong>Tools, knowledge, and protection</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox">Create and manage toolboxes</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/agents/quickstarts/quickstart-foundry-iq-hosted-agent">Foundry IQ knowledge base</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/guardrails/guardrails-overview">Guardrails and controls</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/cloud-adoption-framework/ai-agents/build-secure-process">Build agents securely across an organisation</a>
+            </div>
+
+            <div class="learning-card">
+              <span class="type">Advanced learning path</span>
+              <a href="https://learn.microsoft.com/en-gb/training/paths/aaai-2-build-production-grade-multi-agent-capabilities-microsoft-foundry/">Build production-grade multi-agent capabilities with Microsoft Foundry</a>
+              <p>Four modules covering production prompts, MCP tools, advanced RAG, and multi-agent memory.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage">
+          <span class="stage-number">3</span>
+          <div class="stage-card">
+            <h3>Evaluate</h3>
+            <p>Measure quality and safety, automate release gates, compare versions, and learn from traces.</p>
+
+            <div class="topic">
+              <strong>Evaluation foundations</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/concepts/observability">Observability in generative AI</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/how-to/develop/cloud-evaluation">Run cloud evaluations with the SDK</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/concepts/ai-red-teaming-agent">AI Red Teaming Agent</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/how-to/develop/cloud-evaluation#trace-evaluation-preview">Trace evaluation</a>
+            </div>
+
+            <div class="topic">
+              <strong>CI/CD integration</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/observability/how-to/azure-developer-cli-evaluation">Run evaluations with the azd CLI</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/how-to/evaluation-github-action">Run evaluations in GitHub Actions</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/agents/how-to/set-up-ci-cd-cli">Set up CI/CD for hosted agents</a>
+            </div>
+
+            <div class="learning-card">
+              <span class="type">Learning focus</span>
+              <a href="https://learn.microsoft.com/en-us/training/browse/?products=microsoft-foundry&terms=evaluation">Browse Foundry evaluation training</a>
+              <p>Find current modules for evaluation, observability, responsible AI, and release quality.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage">
+          <span class="stage-number">4</span>
+          <div class="stage-card">
+            <h3>Operate</h3>
+            <p>Monitor the fleet, govern assets across projects, and manage quota, limits, and routing.</p>
+
+            <div class="topic">
+              <strong>Fleet and governance</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/control-plane/overview">Foundry Control Plane overview</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/cloud-adoption-framework/ai-agents/governance-security-across-organization">Govern and secure AI agents</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/guardrails/guardrails-overview">Guardrail controls</a>
+            </div>
+
+            <div class="topic">
+              <strong>Capacity and gateway</strong>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/foundry-models/quotas-limits">Foundry Models quotas and limits</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/openai/how-to/quota">Manage model quota</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/api-management/genai-gateway-capabilities">AI Gateway capabilities</a>
+              <a class="resource-link" href="https://learn.microsoft.com/azure/foundry/control-plane/how-to-enforce-limits-models">Enforce model token limits</a>
+            </div>
+
+            <div class="learning-card">
+              <span class="type">Architecture guidance</span>
+              <a href="https://learn.microsoft.com/azure/architecture/ai-ml/">Azure Architecture Center: AI and ML</a>
+              <p>Reference architectures and production design guidance beyond individual Foundry features.</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section eval-panel" id="evaluation-tools">
+      <div class="eyebrow">CI/CD decision guide</div>
+      <h2>Evaluation approaches</h2>
+      <p>
+        Choose the lightest option that answers the release question. Most production pipelines
+        combine deterministic tests, a repeatable pre-production evaluation, and post-production
+        trace monitoring.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Approach</th>
+              <th>Pros</th>
+              <th>Cons</th>
+              <th>Best use</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="tool-name">Deterministic tests</td>
+              <td>Fast, inexpensive, stable, and clear for schemas, tool arguments, and policy rules.</td>
+              <td>Cannot judge nuanced language quality or end-to-end task completion.</td>
+              <td>Every commit and pull request.</td>
+            </tr>
+            <tr>
+              <td class="tool-name">Local or offline SDK evaluation</td>
+              <td>Early feedback, easy debugging, and support for scoring precomputed responses.</td>
+              <td>Local identity, tools, networking, and configuration can differ from deployment.</td>
+              <td>Developer loop and lightweight PR evaluation.</td>
+            </tr>
+            <tr>
+              <td class="tool-name">Foundry cloud SDK evaluation</td>
+              <td>Fine-grained control over datasets, evaluators, mappings, thresholds, evidence, and target versions.</td>
+              <td>Requires orchestration code, polling, SDK maintenance, Azure access, time, and model cost.</td>
+              <td>Authoritative release gates with custom policy.</td>
+            </tr>
+            <tr>
+              <td class="tool-name"><code>azd ai eval</code></td>
+              <td>Reviewable YAML configuration, natural azd lifecycle integration, and built-in failure thresholds.</td>
+              <td>Preview command surface, less custom reporting, and nonzero exits can represent different failure types.</td>
+              <td>Config-as-code pipelines with less custom SDK orchestration.</td>
+            </tr>
+            <tr>
+              <td class="tool-name">Microsoft evaluation GitHub Action</td>
+              <td>Minimal workflow code, GitHub summaries, confidence intervals, and candidate comparison.</td>
+              <td>Preview and GitHub-specific, with less flexibility than a custom SDK gate.</td>
+              <td>Rapid GitHub Actions integration and version comparison.</td>
+            </tr>
+            <tr>
+              <td class="tool-name">Trace or continuous evaluation</td>
+              <td>Uses real interactions and identifies changing data, tools, user behavior, and upstream drift.</td>
+              <td>Post-release signal with privacy, sampling, and reproducibility considerations.</td>
+              <td>Production monitoring and discovery of new regression cases.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="eval-links">
+        <a href="https://learn.microsoft.com/azure/foundry/how-to/develop/cloud-evaluation">Cloud evaluation SDK</a>
+        <a href="https://learn.microsoft.com/azure/foundry/observability/how-to/azure-developer-cli-evaluation">azd evaluation CLI</a>
+        <a href="https://learn.microsoft.com/azure/foundry/how-to/evaluation-github-action">Evaluation GitHub Action</a>
+        <a href="https://learn.microsoft.com/azure/foundry/concepts/ai-red-teaming-agent">AI red teaming</a>
+        <a href="https://learn.microsoft.com/azure/foundry/concepts/observability">Evaluation and observability concepts</a>
+      </div>
+    </section>
+
+    <section class="section" id="training-path">
+      <header class="section-header">
+        <div>
+          <div class="eyebrow">Featured training</div>
+          <h2>Production multi-agent path</h2>
+        </div>
+        <p>The supplied advanced learning path contains four focused modules.</p>
+      </header>
+
+      <div class="training-strip">
+        <div class="training-item primary">
+          <span>Learning path</span>
+          <a href="https://learn.microsoft.com/en-gb/training/paths/aaai-2-build-production-grade-multi-agent-capabilities-microsoft-foundry/">Build production-grade multi-agent capabilities with Microsoft Foundry</a>
+        </div>
+        <div class="training-item">
+          <span>Module 1</span>
+          <a href="https://learn.microsoft.com/en-gb/training/modules/aaai-design-advanced-prompt-production-agents/">Design advanced prompting strategies for production AI agents</a>
+        </div>
+        <div class="training-item">
+          <span>Module 2</span>
+          <a href="https://learn.microsoft.com/en-gb/training/modules/aaai-build-enterprise-tool-ecosystems-mcp-azure/">Build enterprise-grade tool ecosystems with MCP and Microsoft Foundry</a>
+        </div>
+        <div class="training-item">
+          <span>Module 3</span>
+          <a href="https://learn.microsoft.com/en-gb/training/modules/aaai-implement-advanced-rag-azure-ai-search/">Implement advanced RAG pipelines with Azure AI Search and Microsoft Foundry</a>
+        </div>
+        <div class="training-item">
+          <span>Module 4</span>
+          <a href="https://learn.microsoft.com/en-gb/training/modules/aaai-design-multi-agent-memory-azure-cosmos-db/">Design multi-agent memory architectures with Azure Cosmos DB</a>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>Microsoft Foundry documentation and learning map.</span>
+      <span>Links reviewed 24 August 2026.</span>
+    </footer>
+  </main>
+
+  <script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-theme");
+      document.documentElement.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+    });
+
+    document.getElementById("print-page").addEventListener("click", () => {
+      window.print();
+    });
+  </script>
+</body>
+</html>
