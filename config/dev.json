@@ -1,6 +1,8 @@
 {
   "environment": "dev",
   "azdEnvironment": "dev",
+  "agentName": "SupportAgentHosted",
+  "deploymentSlot": "dev",
   "location": "swedencentral",
   "projectEndpoint": "https://mvanderbend-9174-resource.services.ai.azure.com/api/projects/mvanderbend-9174-dev",
   "projectResourceId": "/subscriptions/78bdf401-d648-4553-a6d0-68fdac0ef440/resourceGroups/michael-eu/providers/Microsoft.CognitiveServices/accounts/mvanderbend-9174-resource/projects/mvanderbend-9174-dev",

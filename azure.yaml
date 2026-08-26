@@ -7,7 +7,7 @@ requiredVersions:
 name: support-agent-hosted
 
 services:
-  support-agent:
+  support-agent-dev:
     project: src/support-agent
     host: azure.ai.agent
     language: python
@@ -27,6 +27,8 @@ services:
         value: ${FOUNDRY_MODEL_NAME}
       - name: TOOLBOX_NAME
         value: ${TOOLBOX_NAME}
+      - name: RELEASE_SLOT
+        value: dev
     kind: hosted
     metadata:
       tags:
@@ -35,6 +37,74 @@ services:
         - Foundry Toolbox
         - Responses Protocol
     name: SupportAgentHosted
+    protocols:
+      - protocol: responses
+        version: 2.0.0
+
+  support-agent-blue:
+    project: src/support-agent
+    host: azure.ai.agent
+    language: python
+    uses:
+      - ai-project
+    codeConfiguration:
+      dependencyResolution: remote_build
+      entryPoint: main.py
+      runtime: python_3_13
+    container:
+      resources:
+        cpu: "0.5"
+        memory: 1Gi
+    description: Blue production slot for the hosted ServiceNow support agent.
+    environmentVariables:
+      - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
+        value: ${FOUNDRY_MODEL_NAME}
+      - name: TOOLBOX_NAME
+        value: ${TOOLBOX_NAME}
+      - name: RELEASE_SLOT
+        value: blue
+    kind: hosted
+    metadata:
+      tags:
+        - Agent Framework
+        - ServiceNow
+        - Foundry Toolbox
+        - Responses Protocol
+    name: SupportAgentHosted
+    protocols:
+      - protocol: responses
+        version: 2.0.0
+
+  support-agent-green:
+    project: src/support-agent
+    host: azure.ai.agent
+    language: python
+    uses:
+      - ai-project
+    codeConfiguration:
+      dependencyResolution: remote_build
+      entryPoint: main.py
+      runtime: python_3_13
+    container:
+      resources:
+        cpu: "0.5"
+        memory: 1Gi
+    description: Green production slot for the hosted ServiceNow support agent.
+    environmentVariables:
+      - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
+        value: ${FOUNDRY_MODEL_NAME}
+      - name: TOOLBOX_NAME
+        value: ${TOOLBOX_NAME}
+      - name: RELEASE_SLOT
+        value: green
+    kind: hosted
+    metadata:
+      tags:
+        - Agent Framework
+        - ServiceNow
+        - Foundry Toolbox
+        - Responses Protocol
+    name: SupportAgentHostedGreen
     protocols:
       - protocol: responses
         version: 2.0.0

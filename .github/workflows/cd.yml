@@ -71,33 +71,36 @@ jobs:
           azd env get-values
           echo "project-endpoint=$(jq -r '.projectEndpoint' "$config")" >> "$GITHUB_OUTPUT"
           echo "evaluation-model=$(jq -r '.evaluationModelDeployment' "$config")" >> "$GITHUB_OUTPUT"
+          echo "agent-name=$(jq -r '.agentName' "$config")" >> "$GITHUB_OUTPUT"
 
       - name: Deploy hosted agent to DEV
-        run: azd deploy --no-prompt
+        run: azd deploy support-agent-dev --no-prompt
 
       - name: Show DEV agent status
-        run: azd ai agent show --no-prompt --output json
+        run: azd ai agent show support-agent-dev --no-prompt --output json
 
       - name: Smoke test DEV
         run: |
           bash scripts/invoke_agent_with_retry.sh \
             /tmp/agent-response.txt \
             "" \
-            "Without calling tools, briefly state the two operational modes you support."
+            "Without calling tools, briefly state the two operational modes you support." \
+            "${{ steps.dev-config.outputs.agent-name }}"
 
       - name: Smoke test DEV ServiceNow connection
         run: |
           bash scripts/invoke_agent_with_retry.sh \
             /tmp/servicenow-response.txt \
             "SERVICENOW_SMOKE_OK" \
-            "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything."
+            "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+            "${{ steps.dev-config.outputs.agent-name }}"
 
       - name: Resolve DEV agent version
         id: agent
         run: |
           set -euo pipefail
-          agent_name="$(azd env get-value AGENT_SUPPORT_AGENT_NAME)"
-          agent_version="$(azd env get-value AGENT_SUPPORT_AGENT_VERSION)"
+          agent_name="$(azd env get-value AGENT_SUPPORT_AGENT_DEV_NAME)"
+          agent_version="$(azd env get-value AGENT_SUPPORT_AGENT_DEV_VERSION)"
           echo "agent-id=${agent_name}:${agent_version}" >> "$GITHUB_OUTPUT"
           echo "DEV candidate: \`${agent_name}:${agent_version}\`" >> "$GITHUB_STEP_SUMMARY"
 
@@ -180,11 +183,24 @@ jobs:
           azd config set defaults.subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Configure PROD environment
+        id: prod-config
         shell: bash
         run: |
           set -euo pipefail
           config="config/prod.json"
           azd_env="$(jq -r '.azdEnvironment' "$config")"
+          candidate_slot="$(jq -r '.candidateSlot' "$config")"
+
+          if [[ "$candidate_slot" != "blue" && "$candidate_slot" != "green" ]]; then
+            echo "::error::config/prod.json candidateSlot must be blue or green."
+            exit 1
+          fi
+
+          candidate_name="$(jq -r --arg slot "$candidate_slot" '.slots[$slot].agentName' "$config")"
+          if [[ -z "$candidate_name" || "$candidate_name" == "null" ]]; then
+            echo "::error::No agent name is configured for PROD slot $candidate_slot."
+            exit 1
+          fi
 
           azd env select "$azd_env" || azd env new "$azd_env" --no-prompt
           azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
@@ -195,18 +211,26 @@ jobs:
           azd env set FOUNDRY_MODEL_NAME "$(jq -r '.modelDeployment' "$config")"
           azd env set TOOLBOX_NAME "$(jq -r '.toolboxName' "$config")"
           azd env get-values
+          echo "candidate-slot=$candidate_slot" >> "$GITHUB_OUTPUT"
+          echo "candidate-name=$candidate_name" >> "$GITHUB_OUTPUT"
+          echo "candidate-service=support-agent-$candidate_slot" >> "$GITHUB_OUTPUT"
 
       - name: Deploy hosted agent to PROD
-        run: azd deploy --no-prompt
+        run: azd deploy "${{ steps.prod-config.outputs.candidate-service }}" --no-prompt
 
       - name: Show PROD agent status
-        run: azd ai agent show --no-prompt --output json
+        run: >-
+          azd ai agent show
+          "${{ steps.prod-config.outputs.candidate-service }}"
+          --no-prompt
+          --output json
 
       - name: Smoke test PROD
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
             if azd ai agent invoke \
+              "${{ steps.prod-config.outputs.candidate-name }}" \
               "Without calling tools, briefly state the two operational modes you support." \
               --new-session \
               --no-prompt \
@@ -225,6 +249,7 @@ jobs:
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
             if azd ai agent invoke \
+              "${{ steps.prod-config.outputs.candidate-name }}" \
               "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
               --new-session \
               --no-prompt \
@@ -241,7 +266,29 @@ jobs:
           cat /tmp/servicenow-response.txt
           exit 1
 
+      - name: Record PROD candidate
+        id: prod-agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          slot="${{ steps.prod-config.outputs.candidate-slot }}"
+          env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
+          agent_name="$(azd env get-value "${env_prefix}_NAME")"
+          agent_version="$(azd env get-value "${env_prefix}_VERSION")"
+          agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
+
+          {
+            echo "## PROD candidate"
+            echo
+            echo "- Slot: \`${{ steps.prod-config.outputs.candidate-slot }}\`"
+            echo "- Agent: \`${agent_name}:${agent_version}\`"
+            echo "- Responses endpoint: \`${agent_endpoint}\`"
+            echo
+            echo "The candidate passed direct smoke tests. Update the existing APIM backend"
+            echo "for this slot, then change the backend-pool weight manually."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Record release
         run: |
-          echo "Promoted commit \`${{ github.sha }}\` after DEV evaluation." >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed candidate commit \`${{ github.sha }}\` after DEV evaluation." >> "$GITHUB_STEP_SUMMARY"
           echo "DEV source version: \`${{ needs.deploy-dev.outputs.agent_id }}\`" >> "$GITHUB_STEP_SUMMARY"
