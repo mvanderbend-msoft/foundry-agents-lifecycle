@@ -15,7 +15,11 @@ The agent uses:
 - A Foundry Toolbox for ServiceNow and web-search tools
 - Environment-specific Foundry projects and tool connections
 
-The runtime is defined in `main.py`. Behaviour and safety boundaries are defined in `instructions.py`. The DEV and PROD toolbox files select the correct project-scoped ServiceNow connection without storing credentials in the repository.
+The runtime is defined in `main.py`. Behaviour and safety boundaries are defined
+in `instructions.py`. PROD uses the project-scoped ServiceNow connection without
+storing credentials in the repository. DEV deliberately omits the unavailable
+ServiceNow MCP connection and enables an explicit non-fabricating mock mode;
+web search remains available in both environments.
 
 ## Source of truth
 

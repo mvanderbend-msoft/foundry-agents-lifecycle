@@ -1,6 +1,4 @@
-description: SupportAgent tools for ServiceNow operations and current public information.
-connections:
-  - name: servicenowmcp-dev
+description: SupportAgent DEV tools with ServiceNow intentionally mocked.
 tools:
   - type: web_search
     name: web_search

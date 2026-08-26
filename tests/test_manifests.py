@@ -64,10 +64,8 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(service_protocol, self.agent["protocols"][0])
 
     def test_toolboxes_use_environment_connections(self):
-        self.assertEqual(
-            self.dev["serviceNowConnection"],
-            self.dev_toolbox["connections"][0]["name"],
-        )
+        self.assertEqual("mock", self.dev["serviceNowMode"])
+        self.assertNotIn("connections", self.dev_toolbox)
         self.assertEqual(
             self.prod["serviceNowConnection"],
             self.prod_toolbox["connections"][0]["name"],
@@ -110,6 +108,21 @@ class ManifestTests(unittest.TestCase):
                 ]
             }
             self.assertEqual(expected_slot, service_environment["RELEASE_SLOT"])
+
+    def test_servicenow_is_mocked_only_in_dev(self):
+        expected_modes = {
+            "support-agent-dev": "mock",
+            "support-agent-blue": "live",
+            "support-agent-green": "live",
+        }
+        for service_name, expected_mode in expected_modes.items():
+            service_environment = {
+                item["name"]: item["value"]
+                for item in self.azure["services"][service_name][
+                    "environmentVariables"
+                ]
+            }
+            self.assertEqual(expected_mode, service_environment["SERVICENOW_MODE"])
 
     def test_environment_projects_are_isolated(self):
         self.assertNotEqual(self.dev["projectEndpoint"], self.prod["projectEndpoint"])

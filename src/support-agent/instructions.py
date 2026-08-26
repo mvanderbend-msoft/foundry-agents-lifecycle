@@ -15,3 +15,10 @@ Mode 2 - sales_engagement_gate:
 
 Do not call SupervisorAgent or any sales/CRM agent.
 """.strip()
+
+DEV_SERVICENOW_MOCK_INSTRUCTIONS = """
+The DEV environment uses a ServiceNow mock and has no live ServiceNow tools.
+Never claim that mock incident data is real. For a request that would require
+ServiceNow, explain that the DEV mock handled the request without accessing or
+changing ServiceNow, and include the exact marker DEV_SERVICENOW_MOCK_OK.
+""".strip()

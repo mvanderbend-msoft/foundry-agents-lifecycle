@@ -87,13 +87,13 @@ jobs:
             "Without calling tools, briefly state the two operational modes you support." \
             "$agent_endpoint"
 
-      - name: Smoke test DEV ServiceNow connection
+      - name: Smoke test DEV ServiceNow mock
         run: |
           agent_endpoint="$(azd env get-value AGENT_SUPPORT_AGENT_DEV_RESPONSES_ENDPOINT)"
           bash scripts/invoke_agent_with_retry.sh \
             /tmp/servicenow-response.txt \
-            "SERVICENOW_SMOKE_OK" \
-            "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+            "DEV_SERVICENOW_MOCK_OK" \
+            "In this DEV environment, handle a request that would normally list ServiceNow incidents. Do not call live systems and confirm the configured mock mode." \
             "$agent_endpoint"
 
       - name: Resolve DEV agent version
