@@ -19,16 +19,30 @@ class AgentInstructionsTests(unittest.TestCase):
 
     def test_priority_changes_require_explicit_authorization(self):
         self.assertIn("explicitly authorized write request", AGENT_INSTRUCTIONS)
+        self.assertIn(
+            "state exactly what is needed before the change can proceed",
+            AGENT_INSTRUCTIONS,
+        )
 
     def test_agent_remains_isolated(self):
         self.assertIn("Do not call SupervisorAgent", AGENT_INSTRUCTIONS)
+        self.assertIn("offer a concise handoff message", AGENT_INSTRUCTIONS)
 
     def test_incident_assessment_requires_json(self):
         self.assertIn("Return ONLY JSON", AGENT_INSTRUCTIONS)
 
     def test_dev_mock_is_explicit_and_non_fabricating(self):
         self.assertIn("DEV_SERVICENOW_MOCK_OK", DEV_SERVICENOW_MOCK_INSTRUCTIONS)
-        self.assertIn("Never claim that mock incident data is real", DEV_SERVICENOW_MOCK_INSTRUCTIONS)
+        self.assertIn("Never claim that an incident", DEV_SERVICENOW_MOCK_INSTRUCTIONS)
+        self.assertIn(
+            "Do not mention the DEV environment",
+            DEV_SERVICENOW_MOCK_INSTRUCTIONS,
+        )
+        self.assertIn(
+            "unless\n"
+            "the user explicitly asks you to confirm the configured mock mode",
+            DEV_SERVICENOW_MOCK_INSTRUCTIONS,
+        )
 
 
 if __name__ == "__main__":
