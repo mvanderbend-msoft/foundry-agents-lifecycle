@@ -27,6 +27,8 @@ Do not store credentials in the repository. The environment-specific ServiceNow 
 ## Microsoft Foundry Skill
 
 Install the **Microsoft Foundry Skill** for guided deployment, evaluation, and troubleshooting workflows.
+This project was built with the Microsoft Foundry Skill. Before working on or
+answering questions about Foundry agents, read that skill first.
 
 Direct install (preferred, works with any coding agent):
 

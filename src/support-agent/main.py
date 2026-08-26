@@ -6,7 +6,7 @@ from agent_framework.foundry import FoundryChatClient
 from agent_framework_foundry_hosting import FoundryToolbox, ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
-from instructions import AGENT_INSTRUCTIONS, DEV_SERVICENOW_MOCK_INSTRUCTIONS
+from instructions import AGENT_INSTRUCTIONS, SERVICENOW_MOCK_INSTRUCTIONS
 
 load_dotenv()
 
@@ -16,7 +16,7 @@ async def main() -> None:
     instructions = AGENT_INSTRUCTIONS
     servicenow_mode = os.getenv("SERVICENOW_MODE", "live")
     if servicenow_mode == "mock":
-        instructions = f"{DEV_SERVICENOW_MOCK_INSTRUCTIONS}\n\n{instructions}"
+        instructions = f"{SERVICENOW_MOCK_INSTRUCTIONS}\n\n{instructions}"
         tools = []
     else:
         tools = FoundryToolbox(credential)

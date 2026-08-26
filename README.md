@@ -12,14 +12,15 @@ The agent uses:
 
 - Microsoft Agent Framework
 - The OpenAI Responses protocol
-- A Foundry Toolbox for ServiceNow and web-search tools
+- Optional Foundry Toolbox definitions for ServiceNow and web-search tools
 - Environment-specific Foundry projects and tool connections
 
 The runtime is defined in `main.py`. Behaviour and safety boundaries are defined
-in `instructions.py`. PROD uses the project-scoped ServiceNow connection without
-storing credentials in the repository. DEV deliberately omits the unavailable
-ServiceNow MCP connection and enables an explicit non-fabricating mock mode;
-web search remains available in both environments.
+in `instructions.py`. The unavailable ServiceNow MCP integration is currently
+disabled in DEV and both PROD slots through `SERVICENOW_MODE=mock`. Mock mode
+does not initialize the Foundry Toolbox, access ServiceNow, or fabricate tool
+results. The PROD toolbox and connection configuration remain source-controlled
+so live mode can be restored after the downstream MCP host is healthy.
 
 ## Source of truth
 
@@ -83,7 +84,7 @@ If it passes:
 2. The same commit is deployed to the candidate slot selected by
    `config/prod.json`.
 3. A new immutable hosted-agent version is created.
-4. PROD agent and ServiceNow smoke tests directly verify that candidate.
+4. PROD agent and ServiceNow mock smoke tests directly verify that candidate.
 5. The workflow summary reports the candidate slot, immutable version, and
    Responses endpoint for the manual APIM rollout.
 
