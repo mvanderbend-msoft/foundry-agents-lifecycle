@@ -80,15 +80,20 @@ After a pull request is merged, the merged commit is deployed and evaluated in D
 
 If it passes:
 
-1. The workflow waits for approval on the protected `prod` GitHub Environment.
-2. The same commit is deployed to the candidate slot selected by
+1. The workflow resolves the candidate slot selected by
    `config/prod.json`.
-3. A new immutable hosted-agent version is created.
-4. PROD agent and ServiceNow mock smoke tests directly verify that candidate.
-5. The workflow summary reports the candidate slot, immutable version, and
-   Responses endpoint for the manual APIM rollout.
+2. The candidate job waits for the first approval on the protected `prod`
+   GitHub Environment.
+3. The same evaluated commit is deployed to the candidate slot and directly
+   verified by the PROD agent and ServiceNow mock smoke tests.
+4. The secondary job waits for a second `prod` approval.
+5. The same commit is deployed to the other slot and receives the same direct
+   smoke tests.
+6. The workflow summary reports both immutable versions and Responses endpoints
+   for the manual APIM rollout.
 
-There is no intermediate test environment. Promotion is DEV to approved PROD.
+There is no intermediate test environment. Promotion is DEV to two sequential,
+independently approved PROD deployments.
 
 ## Manual APIM canary rollout
 
@@ -119,15 +124,18 @@ For a release:
 1. Set `candidateSlot` in `config/prod.json` to the slot that is not currently
    serving production traffic.
 2. Merge the reviewed change. The CD workflow deploys and directly tests that
-   candidate without changing APIM.
+   candidate after the first PROD approval without changing APIM.
 3. Update that slot's APIM backend URL from the workflow summary if the URL has
    changed.
 4. Add the candidate to the APIM pool at a low weight, such as 1 or 5, while
    retaining session affinity.
 5. Increase the candidate weight after each monitoring gate.
-6. At 100%, remove the previous slot from the pool rather than relying on a
-   zero weight.
-7. Change `candidateSlot` to the now-inactive slot before the next release.
+6. At 100%, approve the secondary PROD job. It deploys and tests the same commit
+   on the other slot.
+7. Update the secondary APIM backend URL from the final workflow summary. Both
+   backends now run the same reviewed release.
+8. Change `candidateSlot` before the next release so the inactive or
+   lower-weight slot is deployed first.
 
 Rollback is an APIM-only operation: remove the candidate from the pool and
 route new sessions to the previous slot. Keep the rejected Foundry version

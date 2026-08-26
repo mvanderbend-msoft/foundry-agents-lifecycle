@@ -34,6 +34,11 @@ class ManifestTests(unittest.TestCase):
         cls.main_source = (
             ROOT / "src" / "support-agent" / "main.py"
         ).read_text(encoding="utf-8")
+        cls.cd = yaml.safe_load(
+            (ROOT / ".github" / "workflows" / "cd.yml").read_text(
+                encoding="utf-8"
+            )
+        )
 
     def test_agent_identity_matches(self):
         services = self.azure["services"]
@@ -99,6 +104,16 @@ class ManifestTests(unittest.TestCase):
             self.prod["slots"]["blue"]["agentName"],
             self.prod["slots"]["green"]["agentName"],
         )
+
+    def test_prod_slots_have_sequential_approval_gates(self):
+        jobs = self.cd["jobs"]
+        candidate = jobs["deploy-prod-candidate"]
+        secondary = jobs["deploy-prod-secondary"]
+
+        self.assertEqual("prod", candidate["environment"])
+        self.assertEqual("prod", secondary["environment"])
+        self.assertIn("resolve-prod-slots", candidate["needs"])
+        self.assertIn("deploy-prod-candidate", secondary["needs"])
 
     def test_release_slot_is_available_to_the_runtime(self):
         expected_slots = {

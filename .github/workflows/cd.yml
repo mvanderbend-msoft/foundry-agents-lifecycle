@@ -144,11 +144,174 @@ jobs:
           path: evaluation-results/dev-candidate.json
           if-no-files-found: error
 
-  deploy-prod:
-    name: Deploy to PROD
+  resolve-prod-slots:
+    name: Resolve PROD deployment order
     if: ${{ github.event_name != 'pull_request' }}
     needs:
       - deploy-dev
+    runs-on: ubuntu-latest
+    outputs:
+      candidate_slot: ${{ steps.slots.outputs.candidate_slot }}
+      secondary_slot: ${{ steps.slots.outputs.secondary_slot }}
+
+    steps:
+      - name: Checkout evaluated commit
+        uses: actions/checkout@v4
+
+      - name: Resolve deployment slots
+        id: slots
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_slot="$(jq -r '.candidateSlot' config/prod.json)"
+
+          case "$candidate_slot" in
+            blue) secondary_slot="green" ;;
+            green) secondary_slot="blue" ;;
+            *)
+              echo "::error::config/prod.json candidateSlot must be blue or green."
+              exit 1
+              ;;
+          esac
+
+          echo "candidate_slot=$candidate_slot" >> "$GITHUB_OUTPUT"
+          echo "secondary_slot=$secondary_slot" >> "$GITHUB_OUTPUT"
+          {
+            echo "## PROD deployment order"
+            echo
+            echo "1. Candidate: \`$candidate_slot\`"
+            echo "2. Secondary: \`$secondary_slot\`"
+            echo
+            echo "Each slot requires a separate approval on the protected \`prod\` environment."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-prod-candidate:
+    name: Deploy PROD candidate
+    needs:
+      - deploy-dev
+      - resolve-prod-slots
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: support-agent-prod
+      cancel-in-progress: false
+    outputs:
+      agent_name: ${{ steps.prod-agent.outputs.agent_name }}
+      agent_version: ${{ steps.prod-agent.outputs.agent_version }}
+      agent_endpoint: ${{ steps.prod-agent.outputs.agent_endpoint }}
+
+    steps:
+      - name: Checkout evaluated commit
+        uses: actions/checkout@v4
+
+      - name: Install Azure Developer CLI
+        uses: Azure/setup-azd@v2
+
+      - name: Install Foundry extension
+        run: azd ext install microsoft.foundry
+
+      - name: Verify Foundry extension
+        run: |
+          set -euo pipefail
+          azd ext list | grep -q "microsoft.foundry"
+          azd ai agent --help > /dev/null
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure azd authentication
+        run: |
+          azd config set auth.useAzCliAuth true
+          azd config set defaults.subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Configure PROD environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="config/prod.json"
+          azd_env="$(jq -r '.azdEnvironment' "$config")"
+
+          azd env select "$azd_env" || azd env new "$azd_env" --no-prompt
+          azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          azd env set AZURE_TENANT_ID "${{ vars.AZURE_TENANT_ID }}"
+          azd env set AZURE_LOCATION "$(jq -r '.location' "$config")"
+          azd env set FOUNDRY_PROJECT_ENDPOINT "$(jq -r '.projectEndpoint' "$config")"
+          azd env set AZURE_AI_PROJECT_ID "$(jq -r '.projectResourceId' "$config")"
+          azd env set FOUNDRY_MODEL_NAME "$(jq -r '.modelDeployment' "$config")"
+          azd env set TOOLBOX_NAME "$(jq -r '.toolboxName' "$config")"
+          azd env get-values
+
+      - name: Deploy candidate slot
+        run: >-
+          azd deploy
+          "support-agent-${{ needs.resolve-prod-slots.outputs.candidate_slot }}"
+          --no-prompt
+
+      - name: Show candidate status
+        run: >-
+          azd ai agent show
+          "support-agent-${{ needs.resolve-prod-slots.outputs.candidate_slot }}"
+          --no-prompt
+          --output json
+
+      - name: Smoke test candidate
+        run: |
+          set -euo pipefail
+          slot="${{ needs.resolve-prod-slots.outputs.candidate_slot }}"
+          env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
+          agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/agent-response.txt \
+            "" \
+            "Without calling tools, briefly state the two operational modes you support." \
+            "$agent_endpoint"
+
+      - name: Smoke test candidate ServiceNow mock
+        run: |
+          set -euo pipefail
+          slot="${{ needs.resolve-prod-slots.outputs.candidate_slot }}"
+          env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
+          agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/servicenow-response.txt \
+            "SERVICENOW_MOCK_OK" \
+            "Handle a request that would normally list ServiceNow incidents. Do not call live systems and confirm the configured mock mode." \
+            "$agent_endpoint"
+
+      - name: Record candidate
+        id: prod-agent
+        shell: bash
+        run: |
+          set -euo pipefail
+          slot="${{ needs.resolve-prod-slots.outputs.candidate_slot }}"
+          env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
+          agent_name="$(azd env get-value "${env_prefix}_NAME")"
+          agent_version="$(azd env get-value "${env_prefix}_VERSION")"
+          agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
+
+          echo "agent_name=$agent_name" >> "$GITHUB_OUTPUT"
+          echo "agent_version=$agent_version" >> "$GITHUB_OUTPUT"
+          echo "agent_endpoint=$agent_endpoint" >> "$GITHUB_OUTPUT"
+          {
+            echo "## PROD candidate passed"
+            echo
+            echo "- Slot: \`$slot\`"
+            echo "- Agent: \`${agent_name}:${agent_version}\`"
+            echo "- Responses endpoint: \`${agent_endpoint}\`"
+            echo
+            echo "Approve the secondary PROD deployment to update the other slot."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-prod-secondary:
+    name: Deploy PROD secondary
+    needs:
+      - deploy-dev
+      - resolve-prod-slots
+      - deploy-prod-candidate
     runs-on: ubuntu-latest
     environment: prod
     concurrency:
@@ -184,24 +347,11 @@ jobs:
           azd config set defaults.subscription "${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
       - name: Configure PROD environment
-        id: prod-config
         shell: bash
         run: |
           set -euo pipefail
           config="config/prod.json"
           azd_env="$(jq -r '.azdEnvironment' "$config")"
-          candidate_slot="$(jq -r '.candidateSlot' "$config")"
-
-          if [[ "$candidate_slot" != "blue" && "$candidate_slot" != "green" ]]; then
-            echo "::error::config/prod.json candidateSlot must be blue or green."
-            exit 1
-          fi
-
-          candidate_name="$(jq -r --arg slot "$candidate_slot" '.slots[$slot].agentName' "$config")"
-          if [[ -z "$candidate_name" || "$candidate_name" == "null" ]]; then
-            echo "::error::No agent name is configured for PROD slot $candidate_slot."
-            exit 1
-          fi
 
           azd env select "$azd_env" || azd env new "$azd_env" --no-prompt
           azd env set AZURE_SUBSCRIPTION_ID "${{ vars.AZURE_SUBSCRIPTION_ID }}"
@@ -212,24 +362,24 @@ jobs:
           azd env set FOUNDRY_MODEL_NAME "$(jq -r '.modelDeployment' "$config")"
           azd env set TOOLBOX_NAME "$(jq -r '.toolboxName' "$config")"
           azd env get-values
-          echo "candidate-slot=$candidate_slot" >> "$GITHUB_OUTPUT"
-          echo "candidate-name=$candidate_name" >> "$GITHUB_OUTPUT"
-          echo "candidate-service=support-agent-$candidate_slot" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy hosted agent to PROD
-        run: azd deploy "${{ steps.prod-config.outputs.candidate-service }}" --no-prompt
+      - name: Deploy secondary slot
+        run: >-
+          azd deploy
+          "support-agent-${{ needs.resolve-prod-slots.outputs.secondary_slot }}"
+          --no-prompt
 
-      - name: Show PROD agent status
+      - name: Show secondary status
         run: >-
           azd ai agent show
-          "${{ steps.prod-config.outputs.candidate-service }}"
+          "support-agent-${{ needs.resolve-prod-slots.outputs.secondary_slot }}"
           --no-prompt
           --output json
 
-      - name: Smoke test PROD
+      - name: Smoke test secondary
         run: |
           set -euo pipefail
-          slot="${{ steps.prod-config.outputs.candidate-slot }}"
+          slot="${{ needs.resolve-prod-slots.outputs.secondary_slot }}"
           env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
           agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
           bash scripts/invoke_agent_with_retry.sh \
@@ -238,10 +388,10 @@ jobs:
             "Without calling tools, briefly state the two operational modes you support." \
             "$agent_endpoint"
 
-      - name: Smoke test PROD ServiceNow mock
+      - name: Smoke test secondary ServiceNow mock
         run: |
           set -euo pipefail
-          slot="${{ steps.prod-config.outputs.candidate-slot }}"
+          slot="${{ needs.resolve-prod-slots.outputs.secondary_slot }}"
           env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
           agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
           bash scripts/invoke_agent_with_retry.sh \
@@ -250,29 +400,29 @@ jobs:
             "Handle a request that would normally list ServiceNow incidents. Do not call live systems and confirm the configured mock mode." \
             "$agent_endpoint"
 
-      - name: Record PROD candidate
-        id: prod-agent
+      - name: Record completed PROD release
         shell: bash
         run: |
           set -euo pipefail
-          slot="${{ steps.prod-config.outputs.candidate-slot }}"
+          slot="${{ needs.resolve-prod-slots.outputs.secondary_slot }}"
           env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
           agent_name="$(azd env get-value "${env_prefix}_NAME")"
           agent_version="$(azd env get-value "${env_prefix}_VERSION")"
           agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
 
           {
-            echo "## PROD candidate"
+            echo "## Both PROD slots passed"
             echo
-            echo "- Slot: \`${{ steps.prod-config.outputs.candidate-slot }}\`"
-            echo "- Agent: \`${agent_name}:${agent_version}\`"
-            echo "- Responses endpoint: \`${agent_endpoint}\`"
+            echo "| Order | Slot | Agent | Responses endpoint |"
+            echo "|---|---|---|---|"
+            echo "| Candidate | \`${{ needs.resolve-prod-slots.outputs.candidate_slot }}\` | \`${{ needs.deploy-prod-candidate.outputs.agent_name }}:${{ needs.deploy-prod-candidate.outputs.agent_version }}\` | \`${{ needs.deploy-prod-candidate.outputs.agent_endpoint }}\` |"
+            echo "| Secondary | \`$slot\` | \`${agent_name}:${agent_version}\` | \`${agent_endpoint}\` |"
             echo
-            echo "The candidate passed direct smoke tests. Update the existing APIM backend"
-            echo "for this slot, then change the backend-pool weight manually."
+            echo "Both slots run commit \`${{ github.sha }}\` and passed direct smoke tests."
+            echo "Update both APIM backend URLs, then change backend-pool weights manually."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Record release
         run: |
-          echo "Deployed candidate commit \`${{ github.sha }}\` after DEV evaluation." >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed commit \`${{ github.sha }}\` to both PROD slots after two approvals." >> "$GITHUB_STEP_SUMMARY"
           echo "DEV source version: \`${{ needs.deploy-dev.outputs.agent_id }}\`" >> "$GITHUB_STEP_SUMMARY"
