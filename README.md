@@ -4,7 +4,9 @@ This repository contains a Microsoft Foundry hosted agent and the pipeline that 
 
 ## Agent
 
-`azure.yaml` deploys `src/support-agent` as the hosted agent `SupportAgentHosted`.
+`azure.yaml` defines separate DEV, Blue, and Green deployment services that all
+deploy the shared `src/support-agent` source. DEV retains `SupportAgentHosted`;
+PROD uses permanent Blue and Green agent slots defined in `config/prod.json`.
 
 The agent uses:
 
@@ -74,8 +76,54 @@ After a pull request is merged, the merged commit is deployed and evaluated in D
 If it passes:
 
 1. The workflow waits for approval on the protected `prod` GitHub Environment.
-2. The same commit is deployed to the PROD Foundry project.
+2. The same commit is deployed to the candidate slot selected by
+   `config/prod.json`.
 3. A new immutable hosted-agent version is created.
-4. PROD agent and ServiceNow smoke tests verify the deployment.
+4. PROD agent and ServiceNow smoke tests directly verify that candidate.
+5. The workflow summary reports the candidate slot, immutable version, and
+   Responses endpoint for the manual APIM rollout.
 
 There is no intermediate test environment. Promotion is DEV to approved PROD.
+
+## Manual APIM canary rollout
+
+APIM is intentionally managed outside this repository. Configure two permanent
+APIM backends, one for each PROD slot:
+
+| Slot | Foundry agent |
+|---|---|
+| Blue | `config/prod.json` → `slots.blue.agentName` |
+| Green | `config/prod.json` → `slots.green.agentName` |
+
+Configure the APIM backend pool with weighted routing and cookie-based session
+affinity. The client must retain the affinity cookie for the complete Responses
+conversation so subsequent requests do not move between agent slots.
+
+Use APIM managed identity for calls to Foundry:
+
+1. Assign the APIM identity the **Foundry Agent Consumer** role on the PROD
+   Foundry project or on both agents.
+2. Configure backend authentication with the managed-identity resource
+   `https://ai.azure.com`.
+3. Forward Responses traffic without response buffering.
+4. Do not retry failed agent `POST` requests across slots because tool calls can
+   have side effects.
+
+For a release:
+
+1. Set `candidateSlot` in `config/prod.json` to the slot that is not currently
+   serving production traffic.
+2. Merge the reviewed change. The CD workflow deploys and directly tests that
+   candidate without changing APIM.
+3. Update that slot's APIM backend URL from the workflow summary if the URL has
+   changed.
+4. Add the candidate to the APIM pool at a low weight, such as 1 or 5, while
+   retaining session affinity.
+5. Increase the candidate weight after each monitoring gate.
+6. At 100%, remove the previous slot from the pool rather than relying on a
+   zero weight.
+7. Change `candidateSlot` to the now-inactive slot before the next release.
+
+Rollback is an APIM-only operation: remove the candidate from the pool and
+route new sessions to the previous slot. Keep the rejected Foundry version
+available until its traces and evaluation evidence have been retained.

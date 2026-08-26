@@ -5,14 +5,20 @@ set -euo pipefail
 output_path="$1"
 expected_text="$2"
 prompt="$3"
+agent_name="${4:-}"
 max_attempts="${SMOKE_MAX_ATTEMPTS:-6}"
 base_delay="${SMOKE_RETRY_BASE_SECONDS:-15}"
 max_delay="${SMOKE_RETRY_MAX_SECONDS:-120}"
 azd_command="${AZD_COMMAND:-azd}"
 
+invoke_args=("$prompt")
+if [[ -n "$agent_name" ]]; then
+  invoke_args=("$agent_name" "$prompt")
+fi
+
 for ((attempt = 1; attempt <= max_attempts; attempt++)); do
   if "$azd_command" ai agent invoke \
-    "$prompt" \
+    "${invoke_args[@]}" \
     --new-session \
     --no-prompt \
     --output raw >"$output_path" 2>&1 &&

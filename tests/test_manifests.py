@@ -36,14 +36,32 @@ class ManifestTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
     def test_agent_identity_matches(self):
-        service = self.azure["services"]["support-agent"]
-        self.assertEqual(service["name"], self.agent["name"])
-        self.assertEqual("hosted", service["kind"])
+        services = self.azure["services"]
+        self.assertEqual(self.agent["name"], services["support-agent-dev"]["name"])
+        self.assertEqual(
+            self.prod["slots"]["blue"]["agentName"],
+            services["support-agent-blue"]["name"],
+        )
+        self.assertEqual(
+            self.prod["slots"]["green"]["agentName"],
+            services["support-agent-green"]["name"],
+        )
+        for service_name in (
+            "support-agent-dev",
+            "support-agent-blue",
+            "support-agent-green",
+        ):
+            self.assertEqual("hosted", services[service_name]["kind"])
         self.assertEqual("hosted", self.agent["kind"])
 
     def test_protocol_matches(self):
-        service_protocol = self.azure["services"]["support-agent"]["protocols"][0]
-        self.assertEqual(service_protocol, self.agent["protocols"][0])
+        for service_name in (
+            "support-agent-dev",
+            "support-agent-blue",
+            "support-agent-green",
+        ):
+            service_protocol = self.azure["services"][service_name]["protocols"][0]
+            self.assertEqual(service_protocol, self.agent["protocols"][0])
 
     def test_toolboxes_use_environment_connections(self):
         self.assertEqual(
@@ -68,6 +86,30 @@ class ManifestTests(unittest.TestCase):
     def test_only_dev_and_prod_are_configured(self):
         self.assertEqual("dev", self.dev["environment"])
         self.assertEqual("prod", self.prod["environment"])
+
+    def test_deployment_slots_are_valid_and_distinct(self):
+        self.assertEqual("dev", self.dev["deploymentSlot"])
+        self.assertIn(self.prod["candidateSlot"], {"blue", "green"})
+        self.assertEqual({"blue", "green"}, set(self.prod["slots"]))
+        self.assertNotEqual(
+            self.prod["slots"]["blue"]["agentName"],
+            self.prod["slots"]["green"]["agentName"],
+        )
+
+    def test_release_slot_is_available_to_the_runtime(self):
+        expected_slots = {
+            "support-agent-dev": "dev",
+            "support-agent-blue": "blue",
+            "support-agent-green": "green",
+        }
+        for service_name, expected_slot in expected_slots.items():
+            service_environment = {
+                item["name"]: item["value"]
+                for item in self.azure["services"][service_name][
+                    "environmentVariables"
+                ]
+            }
+            self.assertEqual(expected_slot, service_environment["RELEASE_SLOT"])
 
     def test_environment_projects_are_isolated(self):
         self.assertNotEqual(self.dev["projectEndpoint"], self.prod["projectEndpoint"])
