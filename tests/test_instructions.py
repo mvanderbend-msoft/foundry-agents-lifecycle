@@ -10,7 +10,7 @@ if SPEC is None or SPEC.loader is None:
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 AGENT_INSTRUCTIONS = MODULE.AGENT_INSTRUCTIONS
-DEV_SERVICENOW_MOCK_INSTRUCTIONS = MODULE.DEV_SERVICENOW_MOCK_INSTRUCTIONS
+SERVICENOW_MOCK_INSTRUCTIONS = MODULE.SERVICENOW_MOCK_INSTRUCTIONS
 
 
 class AgentInstructionsTests(unittest.TestCase):
@@ -31,17 +31,16 @@ class AgentInstructionsTests(unittest.TestCase):
     def test_incident_assessment_requires_json(self):
         self.assertIn("Return ONLY JSON", AGENT_INSTRUCTIONS)
 
-    def test_dev_mock_is_explicit_and_non_fabricating(self):
-        self.assertIn("DEV_SERVICENOW_MOCK_OK", DEV_SERVICENOW_MOCK_INSTRUCTIONS)
-        self.assertIn("Never claim that an incident", DEV_SERVICENOW_MOCK_INSTRUCTIONS)
+    def test_servicenow_mock_is_explicit_and_non_fabricating(self):
+        self.assertIn("SERVICENOW_MOCK_OK", SERVICENOW_MOCK_INSTRUCTIONS)
+        self.assertIn("Never claim that an incident", SERVICENOW_MOCK_INSTRUCTIONS)
         self.assertIn(
-            "Do not mention the DEV environment",
-            DEV_SERVICENOW_MOCK_INSTRUCTIONS,
+            "Do not\nmention the deployment environment",
+            SERVICENOW_MOCK_INSTRUCTIONS,
         )
         self.assertIn(
-            "unless\n"
-            "the user explicitly asks you to confirm the configured mock mode",
-            DEV_SERVICENOW_MOCK_INSTRUCTIONS,
+            "unless the user explicitly asks you to confirm the configured mock mode",
+            SERVICENOW_MOCK_INSTRUCTIONS,
         )
 
 

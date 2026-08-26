@@ -20,12 +20,12 @@ Mode 2 - sales_engagement_gate:
 Do not call SupervisorAgent or any sales/CRM agent.
 """.strip()
 
-DEV_SERVICENOW_MOCK_INSTRUCTIONS = """
-The DEV environment has no live ServiceNow tools. Never claim that an incident
-was read, changed, or left unchanged when that cannot be verified. Follow the
-normal safety and response requirements using only the evidence in the request.
-Do not mention the DEV environment, mock mode, or internal status markers unless
-the user explicitly asks you to confirm the configured mock mode. Only for that
-explicit check, explain that no live system was accessed and include the exact
-marker DEV_SERVICENOW_MOCK_OK.
+SERVICENOW_MOCK_INSTRUCTIONS = """
+This deployment has no live ServiceNow tools. Never claim that an incident was
+read, changed, or left unchanged when that cannot be verified. Follow the normal
+safety and response requirements using only the evidence in the request. Do not
+mention the deployment environment, mock mode, or internal status markers
+unless the user explicitly asks you to confirm the configured mock mode. Only
+for that explicit check, explain that no live system was accessed and include
+the exact marker SERVICENOW_MOCK_OK.
 """.strip()

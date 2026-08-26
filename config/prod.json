@@ -1,6 +1,7 @@
 {
   "environment": "prod",
   "azdEnvironment": "prod",
+  "serviceNowMode": "mock",
   "candidateSlot": "green",
   "slots": {
     "blue": {

@@ -65,6 +65,7 @@ class ManifestTests(unittest.TestCase):
 
     def test_toolboxes_use_environment_connections(self):
         self.assertEqual("mock", self.dev["serviceNowMode"])
+        self.assertEqual("mock", self.prod["serviceNowMode"])
         self.assertNotIn("connections", self.dev_toolbox)
         self.assertEqual(
             self.prod["serviceNowConnection"],
@@ -81,7 +82,7 @@ class ManifestTests(unittest.TestCase):
     def test_toolbox_agent_keeps_response_state(self):
         self.assertNotIn('"store": False', self.main_source)
 
-    def test_dev_mock_does_not_initialize_foundry_toolbox(self):
+    def test_mock_mode_does_not_initialize_foundry_toolbox(self):
         self.assertIn('if servicenow_mode == "mock":', self.main_source)
         self.assertIn("tools = []", self.main_source)
         self.assertIn("else:\n        tools = FoundryToolbox(credential)", self.main_source)
@@ -114,11 +115,11 @@ class ManifestTests(unittest.TestCase):
             }
             self.assertEqual(expected_slot, service_environment["RELEASE_SLOT"])
 
-    def test_servicenow_is_mocked_only_in_dev(self):
+    def test_servicenow_is_mocked_in_all_slots(self):
         expected_modes = {
             "support-agent-dev": "mock",
-            "support-agent-blue": "live",
-            "support-agent-green": "live",
+            "support-agent-blue": "mock",
+            "support-agent-green": "mock",
         }
         for service_name, expected_mode in expected_modes.items():
             service_environment = {
