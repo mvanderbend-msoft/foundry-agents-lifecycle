@@ -71,7 +71,6 @@ jobs:
           azd env get-values
           echo "project-endpoint=$(jq -r '.projectEndpoint' "$config")" >> "$GITHUB_OUTPUT"
           echo "evaluation-model=$(jq -r '.evaluationModelDeployment' "$config")" >> "$GITHUB_OUTPUT"
-          echo "agent-name=$(jq -r '.agentName' "$config")" >> "$GITHUB_OUTPUT"
 
       - name: Deploy hosted agent to DEV
         run: azd deploy support-agent-dev --no-prompt
@@ -81,19 +80,21 @@ jobs:
 
       - name: Smoke test DEV
         run: |
+          agent_endpoint="$(azd env get-value AGENT_SUPPORT_AGENT_DEV_RESPONSES_ENDPOINT)"
           bash scripts/invoke_agent_with_retry.sh \
             /tmp/agent-response.txt \
             "" \
             "Without calling tools, briefly state the two operational modes you support." \
-            "${{ steps.dev-config.outputs.agent-name }}"
+            "$agent_endpoint"
 
       - name: Smoke test DEV ServiceNow connection
         run: |
+          agent_endpoint="$(azd env get-value AGENT_SUPPORT_AGENT_DEV_RESPONSES_ENDPOINT)"
           bash scripts/invoke_agent_with_retry.sh \
             /tmp/servicenow-response.txt \
             "SERVICENOW_SMOKE_OK" \
             "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
-            "${{ steps.dev-config.outputs.agent-name }}"
+            "$agent_endpoint"
 
       - name: Resolve DEV agent version
         id: agent
@@ -228,43 +229,26 @@ jobs:
       - name: Smoke test PROD
         run: |
           set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if azd ai agent invoke \
-              "${{ steps.prod-config.outputs.candidate-name }}" \
-              "Without calling tools, briefly state the two operational modes you support." \
-              --new-session \
-              --no-prompt \
-              --output raw > /tmp/agent-response.txt &&
-              grep -q "event: response.completed" /tmp/agent-response.txt &&
-              ! grep -q "event: response.failed" /tmp/agent-response.txt; then
-              exit 0
-            fi
-            sleep $((attempt * 5))
-          done
-          cat /tmp/agent-response.txt
-          exit 1
+          slot="${{ steps.prod-config.outputs.candidate-slot }}"
+          env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
+          agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/agent-response.txt \
+            "" \
+            "Without calling tools, briefly state the two operational modes you support." \
+            "$agent_endpoint"
 
       - name: Smoke test PROD ServiceNow connection
         run: |
           set -euo pipefail
-          for attempt in 1 2 3 4 5; do
-            if azd ai agent invoke \
-              "${{ steps.prod-config.outputs.candidate-name }}" \
-              "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
-              --new-session \
-              --no-prompt \
-              --output raw > /tmp/servicenow-response.txt &&
-              grep -q "event: response.completed" /tmp/servicenow-response.txt &&
-              ! grep -q "event: response.failed" /tmp/servicenow-response.txt &&
-              ! grep -q "Error: Function failed" /tmp/servicenow-response.txt &&
-              ! grep -q '"error":{' /tmp/servicenow-response.txt &&
-              grep -q "SERVICENOW_SMOKE_OK" /tmp/servicenow-response.txt; then
-              exit 0
-            fi
-            sleep $((attempt * 5))
-          done
-          cat /tmp/servicenow-response.txt
-          exit 1
+          slot="${{ steps.prod-config.outputs.candidate-slot }}"
+          env_prefix="AGENT_SUPPORT_AGENT_${slot^^}"
+          agent_endpoint="$(azd env get-value "${env_prefix}_RESPONSES_ENDPOINT")"
+          bash scripts/invoke_agent_with_retry.sh \
+            /tmp/servicenow-response.txt \
+            "SERVICENOW_SMOKE_OK" \
+            "The verified direct-user identity for this smoke test is smoke-test-user. Call the ServiceNow List Records tool exactly once with tableType set to the lowercase singular value incident. If it succeeds, reply SERVICENOW_SMOKE_OK. Do not create or modify anything." \
+            "$agent_endpoint"
 
       - name: Record PROD candidate
         id: prod-agent
