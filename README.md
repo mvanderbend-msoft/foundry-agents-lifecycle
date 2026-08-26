@@ -6,71 +6,68 @@ This repository contains a Microsoft Foundry hosted agent and the pipeline that 
 
 ```mermaid
 flowchart TB
-    Developer["Developer<br/>changes agent code, instructions,<br/>toolboxes, or release configuration"]
-    PR["Pull request"]
+    Change["Source change"] --> PR["Pull request"]
 
     subgraph GitHub["GitHub and GitHub Actions"]
-        direction TB
-        CI["CI quality gate<br/>Ruff + Bandit + unit tests<br/>manifest validation + agent doctor"]
-        DEVDeploy["Deploy PR commit to DEV<br/>SupportAgentHosted"]
-        DEVSmoke["Direct DEV smoke tests<br/>agent behavior + ServiceNow mock"]
-        Eval["Foundry cloud evaluation<br/>release dataset + source-controlled rubrics<br/>quality and safety thresholds"]
-        Merge["Required checks pass<br/>merge immutable commit to main"]
-        MainEval["Deploy merged commit to DEV again<br/>repeat smoke tests and evaluation"]
-        Resolve["Resolve PROD deployment order<br/>candidateSlot from config/prod.json<br/>other slot becomes secondary"]
-        Approval1{"PROD approval 1<br/>candidate"}
-        CandidateDeploy["Deploy candidate slot<br/>exact evaluated commit"]
-        CandidateSmoke["Direct candidate smoke tests<br/>record version and endpoint"]
-        Approval2{"PROD approval 2<br/>secondary"}
-        SecondaryDeploy["Deploy secondary slot<br/>same evaluated commit"]
-        SecondarySmoke["Direct secondary smoke tests<br/>report both versions and endpoints"]
+        CI["Build, lint, security scan,<br/>tests, and configuration validation"]
+        DeployDEV["Deploy exact commit to DEV"]
+        Upload["Upload evaluation assets<br/>dataset + custom evaluators"]
+        CloudEval["Run Foundry cloud evaluation<br/>against the deployed version"]
+        Gate["Enforce quality and safety thresholds"]
+        Merge["Merge approved commit to main"]
+        Revalidate["Repeat DEV deployment<br/>and evaluation from main"]
+        Order["Resolve Blue/Green<br/>deployment order"]
+        Approval1{"Approval 1"}
+        DeployCandidate["Deploy and verify<br/>candidate slot"]
+        Approval2{"Approval 2"}
+        DeploySecondary["Deploy and verify<br/>secondary slot"]
     end
 
     subgraph Foundry["Microsoft Foundry"]
         direction LR
-        DEVProject["DEV project<br/>SupportAgentHosted<br/>ServiceNow mock"]
-        Green["PROD Green<br/>SupportAgentHostedGreen<br/>immutable versions"]
-        Blue["PROD Blue<br/>SupportAgentHosted<br/>immutable versions"]
+        DEV["DEV agent version"]
+        EvalAssets["Versioned datasets<br/>and evaluators"]
+        Results["Cloud evaluation results"]
+        Blue["PROD Blue<br/>immutable version"]
+        Green["PROD Green<br/>immutable version"]
     end
 
-    subgraph Rollout["Manual APIM canary and runtime traffic"]
-        direction TB
-        Canary["Update candidate backend<br/>1% -> 5% -> 25% -> 100%<br/>monitor between stages"]
-        APIM["Azure API Management<br/>weighted backend pool<br/>managed identity + SSE forwarding"]
-        Affinity["SupportAgentAffinity cookie<br/>keeps a conversation on one slot"]
-        Client["Application client<br/>POST /support-agent/responses"]
-        Rollback["Rollback<br/>remove candidate from the pool<br/>route new sessions to stable slot"]
+    subgraph APIMRollout["Azure API Management rollout"]
+        Canary["Weighted canary<br/>1% -> 5% -> 25% -> 100%"]
+        Monitor["Monitor health, latency,<br/>errors, and quality signals"]
+        Pool["Load-balanced backend pool<br/>session affinity for conversations"]
+        Rollback["Rollback routing<br/>to the stable slot"]
     end
 
-    Developer --> PR
     PR --> CI
-    PR --> DEVDeploy
-    DEVDeploy --> DEVProject
-    DEVProject --> DEVSmoke
-    DEVSmoke --> Eval
+    PR --> DeployDEV
+    DeployDEV --> DEV
+    DEV --> Upload
+    Upload --> EvalAssets
+    EvalAssets --> CloudEval
+    DEV --> CloudEval
+    CloudEval --> Results
+    Results --> Gate
     CI --> Merge
-    Eval --> Merge
-    Merge --> MainEval
-    MainEval --> Resolve
-    Resolve --> Approval1
-    Approval1 --> CandidateDeploy
-    CandidateDeploy -.->|"candidate slot"| Green
-    CandidateDeploy -.->|"candidate slot"| Blue
-    CandidateDeploy --> CandidateSmoke
-    CandidateSmoke --> Canary
-    Canary --> APIM
-    Canary -.->|"healthy at 100%"| Approval2
-    Canary -.->|"unhealthy"| Rollback
-    Approval2 --> SecondaryDeploy
-    SecondaryDeploy -.->|"secondary slot"| Blue
-    SecondaryDeploy -.->|"secondary slot"| Green
-    SecondaryDeploy --> SecondarySmoke
-    SecondarySmoke --> APIM
-    Client --> APIM
-    APIM --> Affinity
-    Affinity --> Green
-    Affinity --> Blue
-    Rollback --> APIM
+    Gate --> Merge
+    Merge --> Revalidate
+    Revalidate --> Order
+    Order --> Approval1
+    Approval1 --> DeployCandidate
+    DeployCandidate -.-> Blue
+    DeployCandidate -.-> Green
+    DeployCandidate --> Canary
+    Canary --> Pool
+    Canary --> Monitor
+    Monitor -.->|"healthy"| Approval2
+    Monitor -.->|"unhealthy"| Rollback
+    Approval2 --> DeploySecondary
+    DeploySecondary -.-> Blue
+    DeploySecondary -.-> Green
+    DeploySecondary --> Pool
+    Pool --> Blue
+    Pool --> Green
+    Rollback --> Pool
 
     classDef github fill:#dbeafe,stroke:#0969da,color:#111827,stroke-width:2px;
     classDef foundry fill:#ede9fe,stroke:#5c2d91,color:#111827,stroke-width:2px;
@@ -78,34 +75,12 @@ flowchart TB
     classDef runtime fill:#cffafe,stroke:#0c8599,color:#111827,stroke-width:2px;
     classDef danger fill:#fde7e9,stroke:#d13438,color:#111827,stroke-width:2px;
 
-    class CI,DEVDeploy,DEVSmoke,Eval,Merge,MainEval,Resolve,CandidateDeploy,CandidateSmoke,SecondaryDeploy,SecondarySmoke github;
-    class DEVProject,Green,Blue foundry;
+    class CI,DeployDEV,Upload,CloudEval,Gate,Merge,Revalidate,Order,DeployCandidate,DeploySecondary github;
+    class DEV,EvalAssets,Results,Green,Blue foundry;
     class Approval1,Approval2 approval;
-    class Canary,APIM,Affinity,Client runtime;
+    class Canary,Monitor,Pool runtime;
     class Rollback danger;
 ```
-
-### Demo narrative
-
-1. A pull request starts two required paths: conventional CI checks and a real
-   deployment of the exact commit to the isolated DEV Foundry project.
-2. DEV is invoked directly for smoke tests, then Foundry evaluates it against
-   the release dataset, built-in evaluators, custom rubrics, and repository
-   thresholds.
-3. Only a commit that passes both paths can merge. The merged commit is deployed
-   and evaluated in DEV again so production never promotes untested source.
-4. `candidateSlot` selects which permanent PROD slot is updated first; the
-   workflow automatically identifies the other slot as secondary.
-5. The first protected-environment approval deploys the candidate and records
-   its immutable Foundry version and direct Responses endpoint.
-6. APIM routing is changed manually for new sessions while the affinity cookie
-   keeps each existing conversation on one slot. Traffic can progress from a
-   small canary to 100% while operators watch technical and quality signals.
-7. If the canary is healthy, the second approval deploys the identical commit to
-   the secondary slot. Both APIM backends then represent the same reviewed
-   release.
-8. Rollback changes APIM routing only. Requests are never retried across slots
-   because agent tool calls may have side effects.
 
 ## Agent
 
