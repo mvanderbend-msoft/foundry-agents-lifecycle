@@ -6,14 +6,20 @@ from agent_framework.foundry import FoundryChatClient
 from agent_framework_foundry_hosting import FoundryToolbox, ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
-from instructions import AGENT_INSTRUCTIONS
+from instructions import AGENT_INSTRUCTIONS, DEV_SERVICENOW_MOCK_INSTRUCTIONS
 
 load_dotenv()
 
 
 async def main() -> None:
     credential = DefaultAzureCredential()
-    toolbox = FoundryToolbox(credential)
+    instructions = AGENT_INSTRUCTIONS
+    servicenow_mode = os.getenv("SERVICENOW_MODE", "live")
+    if servicenow_mode == "mock":
+        instructions = f"{DEV_SERVICENOW_MOCK_INSTRUCTIONS}\n\n{instructions}"
+        tools = []
+    else:
+        tools = FoundryToolbox(credential)
     client = FoundryChatClient(
         project_endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
         model=os.environ["AZURE_AI_MODEL_DEPLOYMENT_NAME"],
@@ -21,8 +27,8 @@ async def main() -> None:
     )
     agent = Agent(
         client=client,
-        instructions=AGENT_INSTRUCTIONS,
-        tools=toolbox,
+        instructions=instructions,
+        tools=tools,
     )
     server = ResponsesHostServer(agent)
     await server.run_async()

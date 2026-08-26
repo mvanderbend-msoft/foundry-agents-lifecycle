@@ -64,10 +64,8 @@ class ManifestTests(unittest.TestCase):
             self.assertEqual(service_protocol, self.agent["protocols"][0])
 
     def test_toolboxes_use_environment_connections(self):
-        self.assertEqual(
-            self.dev["serviceNowConnection"],
-            self.dev_toolbox["connections"][0]["name"],
-        )
+        self.assertEqual("mock", self.dev["serviceNowMode"])
+        self.assertNotIn("connections", self.dev_toolbox)
         self.assertEqual(
             self.prod["serviceNowConnection"],
             self.prod_toolbox["connections"][0]["name"],
@@ -82,6 +80,11 @@ class ManifestTests(unittest.TestCase):
 
     def test_toolbox_agent_keeps_response_state(self):
         self.assertNotIn('"store": False', self.main_source)
+
+    def test_dev_mock_does_not_initialize_foundry_toolbox(self):
+        self.assertIn('if servicenow_mode == "mock":', self.main_source)
+        self.assertIn("tools = []", self.main_source)
+        self.assertIn("else:\n        tools = FoundryToolbox(credential)", self.main_source)
 
     def test_only_dev_and_prod_are_configured(self):
         self.assertEqual("dev", self.dev["environment"])
@@ -110,6 +113,21 @@ class ManifestTests(unittest.TestCase):
                 ]
             }
             self.assertEqual(expected_slot, service_environment["RELEASE_SLOT"])
+
+    def test_servicenow_is_mocked_only_in_dev(self):
+        expected_modes = {
+            "support-agent-dev": "mock",
+            "support-agent-blue": "live",
+            "support-agent-green": "live",
+        }
+        for service_name, expected_mode in expected_modes.items():
+            service_environment = {
+                item["name"]: item["value"]
+                for item in self.azure["services"][service_name][
+                    "environmentVariables"
+                ]
+            }
+            self.assertEqual(expected_mode, service_environment["SERVICENOW_MODE"])
 
     def test_environment_projects_are_isolated(self):
         self.assertNotEqual(self.dev["projectEndpoint"], self.prod["projectEndpoint"])

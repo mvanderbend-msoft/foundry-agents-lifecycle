@@ -10,6 +10,7 @@ if SPEC is None or SPEC.loader is None:
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 AGENT_INSTRUCTIONS = MODULE.AGENT_INSTRUCTIONS
+DEV_SERVICENOW_MOCK_INSTRUCTIONS = MODULE.DEV_SERVICENOW_MOCK_INSTRUCTIONS
 
 
 class AgentInstructionsTests(unittest.TestCase):
@@ -24,6 +25,10 @@ class AgentInstructionsTests(unittest.TestCase):
 
     def test_incident_assessment_requires_json(self):
         self.assertIn("Return ONLY JSON", AGENT_INSTRUCTIONS)
+
+    def test_dev_mock_is_explicit_and_non_fabricating(self):
+        self.assertIn("DEV_SERVICENOW_MOCK_OK", DEV_SERVICENOW_MOCK_INSTRUCTIONS)
+        self.assertIn("Never claim that mock incident data is real", DEV_SERVICENOW_MOCK_INSTRUCTIONS)
 
 
 if __name__ == "__main__":
