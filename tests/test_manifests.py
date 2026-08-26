@@ -81,6 +81,11 @@ class ManifestTests(unittest.TestCase):
     def test_toolbox_agent_keeps_response_state(self):
         self.assertNotIn('"store": False', self.main_source)
 
+    def test_dev_mock_does_not_initialize_foundry_toolbox(self):
+        self.assertIn('if servicenow_mode == "mock":', self.main_source)
+        self.assertIn("tools = []", self.main_source)
+        self.assertIn("else:\n        tools = FoundryToolbox(credential)", self.main_source)
+
     def test_only_dev_and_prod_are_configured(self):
         self.assertEqual("dev", self.dev["environment"])
         self.assertEqual("prod", self.prod["environment"])
