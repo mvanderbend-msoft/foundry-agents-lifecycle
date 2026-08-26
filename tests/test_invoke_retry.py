@@ -76,7 +76,7 @@ class InvokeRetryTests(unittest.TestCase):
                 state_path.read_text(encoding="utf-8").strip(),
             )
 
-    def test_passes_explicit_agent_name(self):
+    def test_passes_explicit_agent_endpoint(self):
         with tempfile.TemporaryDirectory() as directory:
             directory_path = Path(directory)
             arguments_path = directory_path / "arguments.txt"
@@ -104,7 +104,7 @@ class InvokeRetryTests(unittest.TestCase):
                     output_path.as_posix(),
                     "SMOKE_OK",
                     "Test prompt",
-                    "SupportAgentHostedGreen",
+                    "https://example.test/agents/green/responses?api-version=v1",
                 ],
                 check=False,
                 capture_output=True,
@@ -119,7 +119,8 @@ class InvokeRetryTests(unittest.TestCase):
                     "ai",
                     "agent",
                     "invoke",
-                    "SupportAgentHostedGreen",
+                    "--agent-endpoint",
+                    "https://example.test/agents/green/responses?api-version=v1",
                     "Test prompt",
                     "--new-session",
                     "--no-prompt",
