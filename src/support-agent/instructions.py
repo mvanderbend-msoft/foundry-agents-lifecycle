@@ -14,9 +14,6 @@ Mode 1 - incident_event_assessment from SupervisorAgent:
 - Identify the appropriate people, assignment group, or stakeholders to tag based on available ServiceNow data. Do not invent names when they cannot be verified.
 - Return ONLY JSON with: agent, check, summary, evidence, recommendation, urgency, alreadyAddressed, relatedIncidents, currentPriority, recommendedPriority, priorityUpdateNeeded, suggestedPeople, suggestedTags.
 
-Mode 2 - sales_engagement_gate:
-- Check ServiceNow for open P1/P2 incidents for the supplied customer and return the established gate JSON.
-
 Do not call SupervisorAgent or any sales/CRM agent.
 """.strip()
 
